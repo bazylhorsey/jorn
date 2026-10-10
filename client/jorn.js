@@ -1,0 +1,310 @@
+// Jorn browser patcher.
+//
+// Applies Jorn's wire protocol (PROTOCOL.md) to the DOM and reports events
+// back. No dependencies. The same file serves both modes:
+//
+//   - Server mode: patches arrive over a socket, events go back over it as
+//     JSON. Only the event fields a handler asked for (`include`) are sent.
+//   - Client mode: your Elm program runs in this page and talks to the
+//     patcher through ports. Pass `raw: true` and handlers get the live event
+//     object, so `include` isn't needed.
+//
+//   import { connect } from "./jorn.js";
+//
+//   const jorn = connect(document.getElementById("app"), {
+//     send: (event) => socket.send(JSON.stringify(event)),
+//   });
+//   jorn.mount(tree);      // once
+//   jorn.patch(patches);   // after every update, in order
+
+const LIVE = {
+  value: new Set(["input", "textarea", "select"]),
+  checked: new Set(["input"]),
+  selected: new Set(["option"]),
+};
+
+const XHTML = "http://www.w3.org/1999/xhtml";
+
+/**
+ * Take over `container` and return the patcher for it. The container's
+ * contents belong to Jorn from here on: its only child is the root node.
+ *
+ * @param {Element} container
+ * @param {{ send: (event: { path: number[], name: string, event: unknown }) => void, raw?: boolean }} options
+ */
+export function connect(container, { send, raw = false } = {}) {
+  if (!container || container.nodeType !== 1) {
+    throw new TypeError("Jorn: connect needs a container element");
+  }
+  if (typeof send !== "function") {
+    throw new TypeError("Jorn: connect needs a send function");
+  }
+
+  const doc = container.ownerDocument;
+  const handlers = new WeakMap(); // element -> Map(event name -> options)
+  const pristine = new Map(); // "namespace tag" -> untouched element, for property defaults
+  const reported = new WeakMap(); // element -> { value: [...], checked: [...] } the user sent, not yet echoed
+  let echoed = new Map(); // element -> { name: value } echoes skipped in the current batch
+
+  // ---- Building nodes ------------------------------------------------------
+
+  function create(node) {
+    if (typeof node.text === "string") return doc.createTextNode(node.text);
+
+    const el = node.namespace
+      ? doc.createElementNS(node.namespace, node.tag)
+      : doc.createElement(node.tag);
+    for (const [name, value] of Object.entries(node.attrs)) el.setAttribute(name, value);
+    // Children before live state and properties, so a <select> has its
+    // options by the time its value is set.
+    for (const child of node.children) el.appendChild(create(child));
+    for (const name of Object.keys(LIVE)) if (Object.hasOwn(node.attrs, name)) syncLive(el, name);
+    for (const [name, value] of Object.entries(node.props)) setProperty(el, name, value);
+    for (const [name, options] of Object.entries(node.events)) setEvent(el, name, options);
+    return el;
+  }
+
+  // `value`, `checked` and `selected` are sent as attributes so they show up
+  // in server-rendered HTML. Once a user has typed or clicked, the attribute
+  // no longer drives what's on screen, so mirror it onto the live property.
+  function syncLive(el, name) {
+    if (!isLive(el, name)) return;
+    writeLive(el, name, name === "value" ? (el.getAttribute("value") ?? "") : el.hasAttribute(name));
+  }
+
+  function isLive(el, name) {
+    return Object.hasOwn(LIVE, name) && el.namespaceURI === XHTML && LIVE[name].has(el.localName);
+  }
+
+  // Updates lag behind the user: by the time the update for "Ba" arrives
+  // they may have typed "Baz". So remember what each element reported, and
+  // treat an update matching one of those as an echo of the past rather than
+  // an instruction. Anything else, like clearing a field, is applied.
+  function writeLive(el, name, want) {
+    // One change can arrive as two patches (an attribute and a property), so
+    // an echo stays an echo for the rest of its batch.
+    if (echoed.get(el)?.[name] === want) return;
+    const pending = reported.get(el)?.[name];
+    if (pending && pending.length) {
+      const echo = pending.indexOf(want);
+      if (echo !== -1) {
+        pending.splice(0, echo + 1);
+        echoed.set(el, { ...echoed.get(el), [name]: want });
+        return;
+      }
+      pending.length = 0;
+    }
+    if (el[name] !== want) el[name] = want; // Leaves the caret alone when unchanged.
+  }
+
+  function remember(el) {
+    for (const name of ["value", "checked"]) {
+      if (!isLive(el, name)) continue;
+      let byName = reported.get(el);
+      if (!byName) reported.set(el, (byName = { value: [], checked: [] }));
+      const pending = byName[name];
+      if (pending[pending.length - 1] !== el[name]) pending.push(el[name]);
+      if (pending.length > 64) pending.shift();
+    }
+  }
+
+  function setProperty(el, name, value) {
+    if (isLive(el, name)) writeLive(el, name, value);
+    else el[name] = value;
+  }
+
+  // A removed property goes back to what a fresh element would have, unless
+  // an attribute of the same name now says otherwise.
+  function resetProperty(el, name) {
+    const fresh = el.localName.includes("-") ? null : defaultsFor(el);
+    if (fresh && name in fresh) {
+      const value = el.hasAttribute(name)
+        ? typeof fresh[name] === "boolean" ? true : el.getAttribute(name)
+        : fresh[name];
+      setProperty(el, name, value);
+    } else {
+      delete el[name];
+      if (name in el) el[name] = undefined; // A setter on a custom element's prototype.
+    }
+  }
+
+  function defaultsFor(el) {
+    const key = `${el.namespaceURI} ${el.localName}`;
+    let fresh = pristine.get(key);
+    if (!fresh) {
+      fresh = doc.createElementNS(el.namespaceURI, el.localName);
+      pristine.set(key, fresh);
+    }
+    return fresh;
+  }
+
+  // ---- Events --------------------------------------------------------------
+
+  function setEvent(el, name, options) {
+    let byName = handlers.get(el);
+    if (!byName) handlers.set(el, (byName = new Map()));
+    if (!byName.has(name)) el.addEventListener(name, listen);
+    byName.set(name, options);
+  }
+
+  function removeEvent(el, name) {
+    const byName = handlers.get(el);
+    if (byName && byName.delete(name)) el.removeEventListener(name, listen);
+  }
+
+  function listen(event) {
+    const el = event.currentTarget;
+    const options = handlers.get(el)?.get(event.type);
+    if (!options) return;
+    // Decided here and now: a server can't answer in time.
+    if (options.preventDefault) event.preventDefault();
+    if (options.stopPropagation) event.stopPropagation();
+    const path = pathOf(el);
+    if (!path) return;
+    remember(el);
+    send({ path, name: event.type, event: raw ? event : pick(event, options.include) });
+  }
+
+  // Paths are computed when the event fires, so they're always correct for
+  // the tree on screen, whatever patches have moved things around.
+  function pathOf(node) {
+    const path = [];
+    while (node !== container.firstChild) {
+      const parent = node.parentNode;
+      if (!parent || parent === container) return null;
+      path.push(Array.prototype.indexOf.call(parent.childNodes, node));
+      node = parent;
+    }
+    return path.reverse();
+  }
+
+  // ---- Patches -------------------------------------------------------------
+
+  function resolve(path) {
+    let node = container.firstChild;
+    for (const index of path) {
+      node = node && node.nodeType === 1 ? node.childNodes[index] : undefined;
+    }
+    if (!node) throw new Error(`Jorn: no node at path [${path}]`);
+    return node;
+  }
+
+  function elementAt(path) {
+    const node = resolve(path);
+    if (node.nodeType !== 1) throw new Error(`Jorn: expected an element at path [${path}]`);
+    return node;
+  }
+
+  function applyPatch(patch) {
+    switch (patch.op) {
+      case "replace": {
+        const old = resolve(patch.path);
+        old.parentNode.replaceChild(create(patch.node), old);
+        break;
+      }
+      case "set-text": {
+        const node = resolve(patch.path);
+        if (node.nodeType !== 3) throw new Error(`Jorn: expected text at path [${patch.path}]`);
+        node.data = patch.text;
+        break;
+      }
+      case "set-attr": {
+        const el = elementAt(patch.path);
+        el.setAttribute(patch.name, patch.value);
+        syncLive(el, patch.name);
+        break;
+      }
+      case "remove-attr": {
+        const el = elementAt(patch.path);
+        el.removeAttribute(patch.name);
+        syncLive(el, patch.name);
+        break;
+      }
+      case "set-prop":
+        setProperty(elementAt(patch.path), patch.name, patch.value);
+        break;
+      case "remove-prop":
+        resetProperty(elementAt(patch.path), patch.name);
+        break;
+      case "set-event":
+        setEvent(elementAt(patch.path), patch.name, patch.options);
+        break;
+      case "remove-event":
+        removeEvent(elementAt(patch.path), patch.name);
+        break;
+      case "append": {
+        const el = elementAt(patch.path);
+        const fragment = doc.createDocumentFragment();
+        for (const node of patch.nodes) fragment.appendChild(create(node));
+        el.appendChild(fragment);
+        break;
+      }
+      case "truncate": {
+        const el = elementAt(patch.path);
+        while (el.childNodes.length > patch.length) el.removeChild(el.lastChild);
+        break;
+      }
+      default:
+        throw new Error(`Jorn: unknown patch op ${JSON.stringify(patch.op)}`);
+    }
+  }
+
+  return {
+    /** Render a whole tree, replacing whatever the container held. */
+    mount(node) {
+      container.replaceChildren(create(node));
+    },
+
+    /** Apply a list of patches, strictly in order. */
+    patch(patches) {
+      echoed = new Map();
+      for (const patch of patches) applyPatch(patch);
+      echoed = new Map();
+    },
+
+    /** The DOM node at a path, or `null`. Handy in tests. */
+    nodeAt(path) {
+      try {
+        return resolve(path);
+      } catch {
+        return null;
+      }
+    },
+
+    /** Empty the container and stop reporting its events. */
+    unmount() {
+      container.replaceChildren();
+    },
+  };
+}
+
+// Copy the requested dotted fields (like "target.value") off an event into
+// plain JSON, keeping their nesting.
+function pick(event, include) {
+  const out = {};
+  for (const dotted of include) {
+    const keys = dotted.split(".");
+    let value = event;
+    for (const key of keys) {
+      value = value == null ? undefined : value[key];
+    }
+    if (value === undefined || typeof value === "function") continue;
+
+    let target = out;
+    for (const key of keys.slice(0, -1)) {
+      if (typeof target[key] !== "object" || target[key] === null) target[key] = {};
+      target = target[key];
+    }
+    target[keys[keys.length - 1]] = toJson(value);
+  }
+  return out;
+}
+
+function toJson(value) {
+  if (value === null || typeof value !== "object") return value;
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch {
+    return null;
+  }
+}

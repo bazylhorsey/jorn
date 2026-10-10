@@ -1,0 +1,45 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  elm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-save elm@0.19.1-6 elm-test@0.19.1-revision15 elm-format@0.8.8
+      - run: npx elm-format --validate src tests examples client/test/elm/src
+      - run: npx elm make --docs=docs.json
+      - run: npx elm-test --fuzz 1000
+      - name: Counter example, headless
+        working-directory: examples/counter
+        run: |
+          $GITHUB_WORKSPACE/node_modules/.bin/elm make src/Main.elm --output=build/main.js
+          node run.mjs
+
+  client:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-save elm@0.19.1-6
+      - run: $GITHUB_WORKSPACE/node_modules/.bin/elm make src/ClientSpec.elm --optimize --output=build/spec.js
+        working-directory: client/test/elm
+      - run: npm ci
+        working-directory: client/test
+      - name: Browser patcher, unit and randomized tests
+        run: node run.mjs 5000
+        working-directory: client/test
+
+  elm-0-19-2:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-save elm@0.19.2-0
+      - run: npx elm make --docs=docs.json

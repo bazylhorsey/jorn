@@ -1,0 +1,9 @@
+{
+  "name": "jorn-client",
+  "version": "0.0.0",
+  "description": "Browser patcher for Jorn: applies Jorn's wire protocol to the DOM and reports events back.",
+  "license": "BSD-3-Clause",
+  "private": true,
+  "type": "module",
+  "exports": "./jorn.js"
+}
