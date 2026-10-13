@@ -1,8 +1,8 @@
 module Jorn.Internal.Vdom exposing
     ( Attribute(..)
+    , Element(..)
     , EventOptions
     , Facts
-    , Html(..)
     , Node(..)
     , defaultOptions
     , encodeNode
@@ -16,7 +16,7 @@ module Jorn.Internal.Vdom exposing
 {-| Internal representation. Not exposed from the package, so constructors
 stay private while tests and sibling modules can still see them.
 
-`Html` carries decoders (it is what your program builds and what event routing
+`Element` carries decoders (it is what your program builds and what event routing
 walks). `Node` is the msg-free projection of it: pure data, safe to serialize,
 and what every patch and mount payload is made of.
 
@@ -27,8 +27,8 @@ import Json.Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
 
 
-type Html msg
-    = Element String String (List (Attribute msg)) (List (Html msg))
+type Element msg
+    = Element String String (List (Attribute msg)) (List (Element msg))
       -- namespace, tag, attributes, children
     | Text String
 
@@ -36,13 +36,20 @@ type Html msg
 type Attribute msg
     = Attr String String
     | Prop String Value
-    | On String EventOptions (Decoder msg)
+    | On String (Decoder msg)
+    | Options EventOptions (Attribute msg)
 
 
 {-| Event options are static on purpose. A server component has to tell the
 client up front whether to call preventDefault, because the decision can't
 wait for a round trip. `include` lists the dotted event fields the client
 must serialize and send back (for example `target.value`).
+
+Options wrap the handler they apply to, and options on the same handler merge:
+`preventDefault` and `stopPropagation` are true if any of them asked, and
+`include` is the union of what they asked for. An option wrapped around
+anything that isn't a handler is dropped, leaving the attribute as it was.
+
 -}
 type alias EventOptions =
     { preventDefault : Bool
@@ -77,7 +84,11 @@ facts attributes =
 
 addFact : Attribute msg -> Facts msg -> Facts msg
 addFact attribute acc =
-    case attribute of
+    let
+        ( options, bare ) =
+            splitOptions attribute
+    in
+    case bare of
         Attr "class" value ->
             { acc | attrs = Dict.update "class" (mergeClass value) acc.attrs }
 
@@ -87,8 +98,51 @@ addFact attribute acc =
         Prop name value ->
             { acc | props = Dict.insert name value acc.props }
 
-        On name options decoder ->
+        On name decoder ->
             { acc | events = Dict.insert name ( options, decoder ) acc.events }
+
+        Options _ _ ->
+            acc
+
+
+{-| Split an attribute into the options wrapped around it and the attribute
+underneath, merging any nesting. Options around anything that isn't a handler
+are simply dropped, leaving the attribute itself untouched.
+-}
+splitOptions : Attribute msg -> ( EventOptions, Attribute msg )
+splitOptions attribute =
+    case attribute of
+        Options added wrapped ->
+            let
+                ( nested, bare ) =
+                    splitOptions wrapped
+            in
+            ( combineOptions added nested, bare )
+
+        _ ->
+            ( defaultOptions, attribute )
+
+
+combineOptions : EventOptions -> EventOptions -> EventOptions
+combineOptions added options =
+    { preventDefault = added.preventDefault || options.preventDefault
+    , stopPropagation = added.stopPropagation || options.stopPropagation
+    , include = addPaths added.include options.include
+    }
+
+
+addPaths : List String -> List String -> List String
+addPaths paths existing =
+    List.foldl
+        (\path acc ->
+            if List.member path acc then
+                acc
+
+            else
+                acc ++ [ path ]
+        )
+        existing
+        paths
 
 
 mergeClass : String -> Maybe String -> Maybe String
@@ -124,7 +178,7 @@ type Node
     | NodeText String
 
 
-toNode : Html msg -> Node
+toNode : Element msg -> Node
 toNode html =
     case html of
         Text content ->
@@ -178,7 +232,7 @@ encodeOptions options =
 {-| Eager: walks the subtree and wraps every decoder. elm/html makes `map`
 lazy with kernel code, which a pure package can't do. Lazy map is on the roadmap.
 -}
-map : (a -> b) -> Html a -> Html b
+map : (a -> b) -> Element a -> Element b
 map f html =
     case html of
         Text content ->
@@ -197,5 +251,8 @@ mapAttribute f attribute =
         Prop name value ->
             Prop name value
 
-        On name options decoder ->
-            On name options (Json.Decode.map f decoder)
+        On name decoder ->
+            On name (Json.Decode.map f decoder)
+
+        Options options wrapped ->
+            Options options (mapAttribute f wrapped)

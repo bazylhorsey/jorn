@@ -8,10 +8,10 @@ Statuses: **done** is available today. **partial** is available with a stated di
 
 | Feature | Status | Notes |
 |---|---|---|
-| Elements with any tag (`node`) and namespaced elements (`nodeNS`) | done | SVG and MathML work today through `nodeNS`. |
+| Elements with any tag (`element`) and namespaced elements (`namespaced`) | done | SVG and MathML work today through `namespaced`. |
 | Text nodes | done | |
-| `Html.map` | partial | Eager: walks the subtree. A lazy map needs kernel code, which a pure package can't use. |
-| HTML element helpers | partial | 20 of about 115 standard elements have helpers (`div`, `span`, `p`, `h1` to `h3`, `a`, `button`, `input`, `label`, `form`, `ul`, `ol`, `li`, `section`, `main_`, `header`, `footer`, `nav`). The rest work through `node`. |
+| `Element.map` | partial | Eager: walks the subtree. A lazy map needs kernel code, which a pure package can't use. |
+| HTML element helpers | partial | 20 of about 115 standard elements have helpers (`div`, `span`, `p`, `h1` to `h3`, `a`, `button`, `input`, `label`, `form`, `ul`, `ol`, `li`, `section`, `main_`, `header`, `footer`, `nav`). The rest work through `element`. |
 | SVG element helpers | todo | |
 | MathML element helpers | todo | |
 | `none` and fragments | todo | |
@@ -25,7 +25,7 @@ Statuses: **done** is available today. **partial** is available with a stated di
 | Feature | Status | Notes |
 |---|---|---|
 | Any attribute (`attribute`) and any property (`property`) | done | |
-| `class` and `classList` | done | Multiple `class` attributes on one element accumulate. |
+| `class` and `classes` | done | Multiple `class` attributes on one element accumulate. |
 | `id`, `href`, `type_`, `name`, `placeholder`, `for` | done | |
 | `value`, `checked`, `disabled` | done | Encoded so server-rendered HTML and the live DOM agree. |
 | Global attributes (`style`, `title`, `hidden`, `tabindex`, `lang`, `data-*`, ...) | todo | All work today through `attribute`. |
@@ -49,7 +49,7 @@ Statuses: **done** is available today. **partial** is available with a stated di
 |---|---|---|
 | Mount (encode a whole tree) | done | `Jorn.Patch.encodeHtml` |
 | Diff and patch encoding | done | `Jorn.Patch`, specified in [PROTOCOL.md](PROTOCOL.md) |
-| Event decoding and routing | done | `Jorn.Event` |
+| Event decoding and routing | done | `Jorn.Internal.Event`, public once the runtime lands |
 
 ## Runtime
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Public modules reorganized around what things are instead of mirroring `elm/html` (#1). `Jorn.Html` is now `Jorn.Element`, its element helpers are in `Jorn.Element.Html`, `Jorn.Html.Attributes` is `Jorn.Attribute`, and `Jorn.Html.Events` is `Jorn.Event`.
+- Renames: `node` to `element`, `nodeNS` to `namespaced`, the `Html` type to `Element`, and `classList` to `classes`.
+- Event options are now attributes of the handler: `Event.preventDefault (onSubmit Submit)`. Options on one handler merge, and an option around anything that isn't a handler is ignored.
+- Event routing moved from `Jorn.Event` to `Jorn.Internal.Event`. It becomes public with the server component API and the runtime.
+- No change to the wire protocol. The golden tests in `tests/DiffTest.elm` still pass byte for byte.
+
 ## v0.0 (2026-10-10)
 
 First public release. The foundation layer.

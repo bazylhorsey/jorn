@@ -5,11 +5,11 @@
     "license": "BSD-3-Clause",
     "version": "1.0.0",
     "exposed-modules": [
-        "Jorn.Html",
-        "Jorn.Html.Attributes",
-        "Jorn.Html.Events",
-        "Jorn.Patch",
-        "Jorn.Event"
+        "Jorn.Attribute",
+        "Jorn.Element",
+        "Jorn.Element.Html",
+        "Jorn.Event",
+        "Jorn.Patch"
     ],
     "elm-version": "0.19.0 <= v < 0.20.0",
     "dependencies": {

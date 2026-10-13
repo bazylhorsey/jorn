@@ -2,9 +2,10 @@ module DiffTest exposing (suite)
 
 import Expect exposing (Expectation)
 import Fuzz exposing (Fuzzer)
-import Jorn.Html as Html exposing (Html)
-import Jorn.Html.Attributes as Attr
-import Jorn.Html.Events as Events
+import Jorn.Attribute as Attr
+import Jorn.Element as Element exposing (Element)
+import Jorn.Element.Html as Html
+import Jorn.Event as Events
 import Jorn.Internal.Patch exposing (Patch(..))
 import Jorn.Internal.Vdom as Vdom
 import Jorn.Patch
@@ -32,7 +33,7 @@ expectPatches expected actual =
         (Encode.encode 2 (Jorn.Patch.encode actual))
 
 
-node : Html msg -> Vdom.Node
+node : Element msg -> Vdom.Node
 node =
     Vdom.toNode
 
@@ -44,14 +45,14 @@ unit =
             \_ ->
                 let
                     tree =
-                        Html.div [ Attr.class "a", Events.onClick () ] [ Html.text "hi" ]
+                        Html.div [ Attr.class "a", Events.onClick () ] [ Element.text "hi" ]
                 in
                 Jorn.Patch.diff tree tree |> expectPatches []
         , test "changed text" <|
             \_ ->
                 Jorn.Patch.diff
-                    (Html.div [] [ Html.text "a" ])
-                    (Html.div [] [ Html.text "b" ])
+                    (Html.div [] [ Element.text "a" ])
+                    (Html.div [] [ Element.text "b" ])
                     |> expectPatches [ SetText [ 0 ] "b" ]
         , test "changed tag replaces" <|
             \_ ->
@@ -60,12 +61,12 @@ unit =
         , test "changed namespace replaces" <|
             \_ ->
                 Jorn.Patch.diff
-                    (Html.node "svg" [] [])
-                    (Html.nodeNS "http://www.w3.org/2000/svg" "svg" [] [])
-                    |> expectPatches [ Replace [] (node (Html.nodeNS "http://www.w3.org/2000/svg" "svg" [] [])) ]
+                    (Element.element "svg" [] [])
+                    (Element.namespaced "http://www.w3.org/2000/svg" "svg" [] [])
+                    |> expectPatches [ Replace [] (node (Element.namespaced "http://www.w3.org/2000/svg" "svg" [] [])) ]
         , test "text to element replaces" <|
             \_ ->
-                Jorn.Patch.diff (Html.div [] [ Html.text "x" ]) (Html.div [] [ Html.p [] [] ])
+                Jorn.Patch.diff (Html.div [] [ Element.text "x" ]) (Html.div [] [ Html.p [] [] ])
                     |> expectPatches [ Replace [ 0 ] (node (Html.p [] [])) ]
         , test "attributes added, changed, removed" <|
             \_ ->
@@ -81,13 +82,13 @@ unit =
             \_ ->
                 Jorn.Patch.diff
                     (Html.div [ Attr.class "a" ] [])
-                    (Html.div [ Attr.class "a", Attr.classList [ ( "b", True ), ( "c", False ) ] ] [])
+                    (Html.div [ Attr.class "a", Attr.classes [ ( "b", True ), ( "c", False ) ] ] [])
                     |> expectPatches [ SetAttribute [] "class" "a b" ]
         , test "property change" <|
             \_ ->
                 Jorn.Patch.diff
-                    (Html.node "data-grid" [ Attr.property "rows" (Encode.int 1) ] [])
-                    (Html.node "data-grid" [ Attr.property "rows" (Encode.int 2) ] [])
+                    (Element.element "data-grid" [ Attr.property "rows" (Encode.int 1) ] [])
+                    (Element.element "data-grid" [ Attr.property "rows" (Encode.int 2) ] [])
                     |> expectPatches [ SetProperty [] "rows" (Encode.int 2) ]
         , test "value is an attribute" <|
             \_ ->
@@ -111,8 +112,8 @@ unit =
                         Encode.object [ ( "rows", Encode.list Encode.int [ 1, 2 ] ) ]
                 in
                 Jorn.Patch.diff
-                    (Html.node "data-grid" [ Attr.property "config" config ] [])
-                    (Html.node "data-grid" [ Attr.property "config" (Encode.object [ ( "rows", Encode.list Encode.int [ 1, 2 ] ) ]) ] [])
+                    (Element.element "data-grid" [ Attr.property "config" config ] [])
+                    (Element.element "data-grid" [ Attr.property "config" (Encode.object [ ( "rows", Encode.list Encode.int [ 1, 2 ] ) ]) ] [])
                     |> expectPatches []
         , test "removed property" <|
             \_ ->
@@ -135,39 +136,58 @@ unit =
                     |> expectPatches []
         , test "changed event options are re-sent" <|
             \_ ->
-                let
-                    opts =
-                        { preventDefault = True, stopPropagation = False, include = [] }
-                in
                 Jorn.Patch.diff
                     (Html.form [ Events.on "submit" (Decode.succeed ()) ] [])
-                    (Html.form [ Events.custom "submit" opts (Decode.succeed ()) ] [])
-                    |> expectPatches [ SetEvent [] "submit" opts ]
+                    (Html.form [ Events.preventDefault (Events.onSubmit ()) ] [])
+                    |> expectPatches
+                        [ SetEvent [] "submit" { preventDefault = True, stopPropagation = False, include = [] } ]
+        , test "an option reaches only the handler it wraps" <|
+            \_ ->
+                Jorn.Patch.diff
+                    (Html.div [] [])
+                    (Html.div [ Events.preventDefault (Events.onClick ()), Events.onInput (\_ -> ()) ] [])
+                    |> expectPatches
+                        [ SetEvent [] "click" { preventDefault = True, stopPropagation = False, include = [] }
+                        , SetEvent [] "input" { preventDefault = False, stopPropagation = False, include = [ "target.value" ] }
+                        ]
+        , test "options on one handler merge rather than replace each other" <|
+            \_ ->
+                Jorn.Patch.diff
+                    (Html.div [] [])
+                    (Html.div [ Events.include [ "target.value" ] (Events.stopPropagation (Events.onClick ())) ] [])
+                    |> expectPatches
+                        [ SetEvent [] "click" { preventDefault = False, stopPropagation = True, include = [ "target.value" ] } ]
+        , test "an option around something that is not a handler is ignored" <|
+            \_ ->
+                Jorn.Patch.diff
+                    (Html.div [] [])
+                    (Html.div [ Events.preventDefault (Attr.id "x") ] [])
+                    |> expectPatches [ SetAttribute [] "id" "x" ]
         , test "children appended" <|
             \_ ->
                 Jorn.Patch.diff
                     (Html.ul [] [ Html.li [] [] ])
-                    (Html.ul [] [ Html.li [] [], Html.li [] [ Html.text "2" ], Html.li [] [] ])
-                    |> expectPatches [ Append [] [ node (Html.li [] [ Html.text "2" ]), node (Html.li [] []) ] ]
+                    (Html.ul [] [ Html.li [] [], Html.li [] [ Element.text "2" ], Html.li [] [] ])
+                    |> expectPatches [ Append [] [ node (Html.li [] [ Element.text "2" ]), node (Html.li [] []) ] ]
         , test "children truncated, after patches to surviving children" <|
             \_ ->
                 Jorn.Patch.diff
-                    (Html.ul [] [ Html.li [] [ Html.text "a" ], Html.li [] [], Html.li [] [] ])
-                    (Html.ul [] [ Html.li [] [ Html.text "b" ] ])
+                    (Html.ul [] [ Html.li [] [ Element.text "a" ], Html.li [] [], Html.li [] [] ])
+                    (Html.ul [] [ Html.li [] [ Element.text "b" ] ])
                     |> expectPatches [ SetText [ 0, 0 ] "b", Truncate [] 1 ]
         , test "deep paths" <|
             \_ ->
                 Jorn.Patch.diff
-                    (Html.div [] [ Html.p [] [], Html.ul [] [ Html.li [] [], Html.li [] [ Html.text "old" ] ] ])
-                    (Html.div [] [ Html.p [] [], Html.ul [] [ Html.li [] [], Html.li [] [ Html.text "new" ] ] ])
+                    (Html.div [] [ Html.p [] [], Html.ul [] [ Html.li [] [], Html.li [] [ Element.text "old" ] ] ])
+                    (Html.div [] [ Html.p [] [], Html.ul [] [ Html.li [] [], Html.li [] [ Element.text "new" ] ] ])
                     |> expectPatches [ SetText [ 1, 1, 0 ] "new" ]
         , test "map produces no patches when only messages change" <|
             \_ ->
                 let
                     view =
-                        Html.button [ Events.onClick 1 ] [ Html.text "+" ]
+                        Html.button [ Events.onClick 1 ] [ Element.text "+" ]
                 in
-                Jorn.Patch.diff (Html.map String.fromInt view) (Html.map (\n -> String.fromInt (n + 1)) view)
+                Jorn.Patch.diff (Element.map String.fromInt view) (Element.map (\n -> String.fromInt (n + 1)) view)
                     |> expectPatches []
         ]
 
@@ -181,8 +201,8 @@ wire =
         [ test "golden patch encoding" <|
             \_ ->
                 Jorn.Patch.diff
-                    (Html.div [ Attr.id "root" ] [ Html.text "a", Html.input [] [] ])
-                    (Html.div [ Attr.id "root" ] [ Html.text "b", Html.input [ Events.onInput identity ] [], Html.span [ Attr.class "x" ] [] ])
+                    (Html.div [ Attr.id "root" ] [ Element.text "a", Html.input [] [] ])
+                    (Html.div [ Attr.id "root" ] [ Element.text "b", Html.input [ Events.onInput identity ] [], Html.span [ Attr.class "x" ] [] ])
                     |> Jorn.Patch.encode
                     |> Encode.encode 0
                     |> Expect.equal
@@ -194,7 +214,7 @@ wire =
                         )
         , test "golden mount encoding" <|
             \_ ->
-                Html.button [ Attr.disabled True, Events.onClick () ] [ Html.text "go" ]
+                Html.button [ Attr.disabled True, Events.onClick () ] [ Element.text "go" ]
                     |> Jorn.Patch.encodeHtml
                     |> Encode.encode 0
                     |> Expect.equal
@@ -221,10 +241,10 @@ properties =
             \a b ->
                 let
                     ma =
-                        Html.map String.length a
+                        Element.map String.length a
 
                     mb =
-                        Html.map String.length b
+                        Element.map String.length b
                 in
                 Reference.apply (Jorn.Patch.diff ma mb) (Vdom.toNode ma)
                     |> Maybe.map Reference.render
@@ -235,11 +255,11 @@ properties =
 {-| Small alphabets on purpose: collisions between the two trees are what
 exercise the interesting branches.
 -}
-html : Int -> Fuzzer (Html String)
+html : Int -> Fuzzer (Element String)
 html depth =
     let
         textNode =
-            Fuzz.map Html.text (Fuzz.oneOfValues [ "", "a", "b" ])
+            Fuzz.map Element.text (Fuzz.oneOfValues [ "", "a", "b" ])
     in
     if depth <= 0 then
         textNode
@@ -257,7 +277,14 @@ html depth =
             ]
 
 
-attribute : Fuzzer (Html.Attribute String)
+{-| Options are functions, so pick them from a set rather than build one.
+-}
+options : Fuzzer (Events.Options String)
+options =
+    Fuzz.oneOfValues [ identity, Events.preventDefault, Events.stopPropagation ]
+
+
+attribute : Fuzzer (Attr.Attribute String)
 attribute =
     Fuzz.oneOf
         [ Fuzz.map2 Attr.attribute (Fuzz.oneOfValues [ "id", "title", "class" ]) (Fuzz.oneOfValues [ "", "x", "y" ])
@@ -265,7 +292,7 @@ attribute =
         , Fuzz.map Attr.checked Fuzz.bool
         , Fuzz.map (\items -> Attr.property "config" (Encode.list Encode.int items)) (Fuzz.listOfLengthBetween 0 2 (Fuzz.intRange 0 2))
         , Fuzz.map2
-            (\name pd -> Events.custom name { preventDefault = pd, stopPropagation = False, include = [] } (Decode.succeed name))
+            (\name opts -> Events.custom name opts (Decode.succeed name))
             (Fuzz.oneOfValues [ "click", "input" ])
-            Fuzz.bool
+            options
         ]

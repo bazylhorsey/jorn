@@ -1,9 +1,10 @@
 module EventTest exposing (suite)
 
 import Expect
-import Jorn.Event as Event exposing (Error(..))
-import Jorn.Html as Html exposing (Html)
-import Jorn.Html.Events as Events
+import Jorn.Element as Element exposing (Element)
+import Jorn.Element.Html as Html
+import Jorn.Event as Events
+import Jorn.Internal.Event as Event exposing (Error(..))
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Test exposing (Test, describe, test)
@@ -15,15 +16,15 @@ type Msg
     | Child Int
 
 
-view : Html Msg
+view : Element Msg
 view =
     Html.div []
-        [ Html.text "header"
+        [ Element.text "header"
         , Html.form []
             [ Html.input [ Events.onInput Typed ] []
-            , Html.button [ Events.onClick Clicked ] [ Html.text "go" ]
+            , Html.button [ Events.onClick Clicked ] [ Element.text "go" ]
             ]
-        , Html.map Child (Html.button [ Events.onClick 7 ] [])
+        , Element.map Child (Html.button [ Events.onClick 7 ] [])
         ]
 
 
