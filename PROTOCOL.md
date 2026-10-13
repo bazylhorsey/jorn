@@ -49,7 +49,7 @@ A patch message is a JSON array of patches. **Apply them strictly in order.** Th
 { "path": [1, 0], "name": "input", "event": { "target": { "value": "hi" } } }
 ```
 
-The client applies `preventDefault` and `stopPropagation` synchronously from the listener's options, then builds `event` from the dotted paths in `include`. When Elm runs in the same page (client mode), the client can pass the live event object instead, and `include` doesn't matter. `Jorn.Event.decoder` parses this message and `Jorn.Event.route` runs the matching handler's decoder against the tree the client is displaying.
+The client applies `preventDefault` and `stopPropagation` synchronously from the listener's options, then builds `event` from the dotted paths in `include`. When Elm runs in the same page (client mode), the client can pass the live event object instead, and `include` doesn't matter. Routing an incoming event to the handler that produced it lives in `Jorn.Internal.Event` for now, and becomes public with the runtime.
 
 ## Semantics worth knowing
 
@@ -57,5 +57,5 @@ Within one element, the last attribute, property, or handler with a given name w
 
 Changing only a handler's message (same event name and options) produces no patch. Decoders stay in Elm and routing always uses the current tree.
 
-`Html.map` is eager: it walks the subtree and wraps every decoder. `elm/html` makes it lazy with kernel code, which a pure package can't do.
+`Element.map` is eager: it walks the subtree and wraps every decoder. `elm/html` makes it lazy with kernel code, which a pure package can't do.
 

@@ -7,7 +7,7 @@
 //    what C describes: tags, namespaces, attributes, live properties, text.
 //    Then fire every event on every element and check that exactly the
 //    elements with a handler report it, with the right preventDefault, and
-//    that Jorn.Event routes each report back to the handler on that element.
+//    that the event router sends each report back to the handler on that element.
 //
 // Usage: node client/test/run.mjs [cases] [seed]
 // Build first: cd client/test/elm && elm make src/ClientSpec.elm --optimize --output=build/spec.js

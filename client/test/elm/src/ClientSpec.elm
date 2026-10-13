@@ -9,10 +9,10 @@ exercise every diff branch.
 -}
 
 import Dict exposing (Dict)
-import Jorn.Event
-import Jorn.Html.Attributes as Attr
-import Jorn.Html.Events as Events
-import Jorn.Internal.Vdom as Vdom exposing (Html(..))
+import Jorn.Attribute as Attr
+import Jorn.Event as Events
+import Jorn.Internal.Event as Routing
+import Jorn.Internal.Vdom as Vdom exposing (Element(..))
 import Jorn.Patch
 import Json.Decode as Decode
 import Json.Encode as Encode exposing (Value)
@@ -34,7 +34,7 @@ type Msg
 
 
 type alias Model =
-    Dict Int (Html String)
+    Dict Int (Vdom.Element String)
 
 
 main : Program () Model Msg
@@ -76,14 +76,14 @@ update msg model =
         Route { caseId, message } ->
             let
                 result =
-                    case ( Dict.get caseId model, Decode.decodeValue Jorn.Event.decoder message ) of
+                    case ( Dict.get caseId model, Decode.decodeValue Routing.decoder message ) of
                         ( Just view, Ok incoming ) ->
-                            case Jorn.Event.route incoming view of
+                            case Routing.route incoming view of
                                 Ok id ->
                                     "ok:" ++ id
 
                                 Err error ->
-                                    "err:" ++ Jorn.Event.errorToString error
+                                    "err:" ++ Routing.errorToString error
 
                         ( Nothing, _ ) ->
                             "err:unknown case"
@@ -98,18 +98,18 @@ update msg model =
 -- GENERATION
 
 
-triple : Generator ( Html (), Html (), Html () )
+triple : Generator ( Vdom.Element (), Vdom.Element (), Vdom.Element () )
 triple =
     Random.uniform unrelated [ evolving ]
         |> Random.andThen identity
 
 
-unrelated : Generator ( Html (), Html (), Html () )
+unrelated : Generator ( Vdom.Element (), Vdom.Element (), Vdom.Element () )
 unrelated =
     Random.map3 (\a b c -> ( a, b, c )) (tree 4) (tree 4) (tree 4)
 
 
-evolving : Generator ( Html (), Html (), Html () )
+evolving : Generator ( Vdom.Element (), Vdom.Element (), Vdom.Element () )
 evolving =
     tree 6
         |> Random.andThen
@@ -121,7 +121,7 @@ evolving =
 
 {-| A small random edit: most nodes survive untouched.
 -}
-mutate : Html () -> Generator (Html ())
+mutate : Vdom.Element () -> Generator (Vdom.Element ())
 mutate html =
     case html of
         Text _ ->
@@ -146,7 +146,7 @@ mutate html =
                     )
 
 
-mutateChildren : String -> List (Html ()) -> Generator (List (Html ()))
+mutateChildren : String -> List (Vdom.Element ()) -> Generator (List (Vdom.Element ()))
 mutateChildren tag kids =
     if tag == "input" then
         Random.constant []
@@ -177,7 +177,7 @@ traverse f items =
 {-| Small alphabets so that A, B and C collide often, which is what exercises
 the interesting diff branches.
 -}
-tree : Int -> Generator (Html ())
+tree : Int -> Generator (Vdom.Element ())
 tree depth =
     let
         text =
@@ -191,7 +191,7 @@ tree depth =
             |> Random.andThen identity
 
 
-element : Int -> Generator (Html ())
+element : Int -> Generator (Vdom.Element ())
 element depth =
     Random.uniform ( "", "div" ) [ ( "", "span" ), ( "", "li" ), ( "", "button" ), ( "", "input" ), ( "http://www.w3.org/2000/svg", "g" ) ]
         |> Random.andThen
@@ -216,7 +216,16 @@ attribute =
         , Random.map Attr.disabled (Random.uniform True [ False ])
         , Random.map (\n -> Attr.property "config" (Encode.list Encode.int (List.range 0 n))) (Random.int 0 2)
         , Random.map2
-            (\name prevent -> Events.custom name { preventDefault = prevent, stopPropagation = False, include = [] } (Decode.succeed ()))
+            (\name prevent ->
+                Events.custom name
+                    (if prevent then
+                        Events.preventDefault
+
+                     else
+                        identity
+                    )
+                    (Decode.succeed ())
+            )
             (Random.uniform "click" [ "input", "mouseover" ])
             (Random.uniform True [ False ])
         ]
@@ -254,8 +263,11 @@ attrName attr =
         Vdom.Prop n _ ->
             n
 
-        Vdom.On n _ _ ->
+        Vdom.On n _ ->
             "on" ++ n
+
+        Vdom.Options _ wrapped ->
+            attrName wrapped
 
 
 
@@ -264,12 +276,12 @@ attrName attr =
 
 {-| Make each handler produce its element's position in document order.
 -}
-label : Html () -> Html String
+label : Vdom.Element () -> Vdom.Element String
 label html =
     Tuple.first (labelHelp html 0)
 
 
-labelHelp : Html () -> Int -> ( Html String, Int )
+labelHelp : Vdom.Element () -> Int -> ( Vdom.Element String, Int )
 labelHelp html next =
     case html of
         Text s ->
@@ -304,5 +316,8 @@ relabel id attr =
         Vdom.Prop n v ->
             Vdom.Prop n v
 
-        Vdom.On n options _ ->
-            Vdom.On n options (Decode.succeed id)
+        Vdom.On n _ ->
+            Vdom.On n (Decode.succeed id)
+
+        Vdom.Options options wrapped ->
+            Vdom.Options options (relabel id wrapped)

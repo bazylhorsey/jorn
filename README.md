@@ -11,13 +11,14 @@ Jorn is an attempt to build the web framework that doesn't make you choose. Toda
 A virtual DOM that is ordinary Elm data, so a `view` can be diffed anywhere: in the browser, in a Node process, or on a server streaming patches to a browser.
 
 ```elm
-import Jorn.Html as Html exposing (Html)
-import Jorn.Html.Events exposing (onClick)
+import Jorn.Element as Element exposing (Element)
+import Jorn.Element.Html as Html
+import Jorn.Event exposing (onClick)
 import Jorn.Patch
 
-view : Int -> Html Msg
+view : Int -> Element Msg
 view count =
-    Html.button [ onClick Increment ] [ Html.text (String.fromInt count) ]
+    Html.button [ onClick Increment ] [ Element.text (String.fromInt count) ]
 
 patches =
     Jorn.Patch.diff (view 1) (view 2)
@@ -26,9 +27,8 @@ patches =
 
 | Module | What it does |
 |---|---|
-| `Jorn.Html`, `Jorn.Html.Attributes`, `Jorn.Html.Events` | Build views. Same shape as `elm/html`. |
+| `Jorn.Element`, `Jorn.Element.Html`, `Jorn.Attribute`, `Jorn.Event` | Build views. Ordinary Elm data, like `elm/html`. |
 | `Jorn.Patch` | Diff two views and encode the patches as JSON. |
-| `Jorn.Event` | Take an event reported by the client and route it to the handler that produced it. |
 | [`client/jorn.js`](client/jorn.js) | The browser side: apply patches to the DOM and report events back. No dependencies. |
 
 [examples/counter](examples/counter) runs the full loop two ways: in a browser page, and headless in Node the way a server component would. Either way it mounts a view, takes click and input events, and sends back only what changed:
