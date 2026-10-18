@@ -50,6 +50,7 @@ export function connect(container, { send, raw = false, effects = {} } = {}) {
   const pristine = new Map(); // "namespace tag" -> untouched element, for property defaults
   const reported = new WeakMap(); // element -> { value: [...], checked: [...] } the user sent, not yet echoed
   let echoed = new Map(); // element -> { name: value } echoes skipped in the current batch
+  let changing = false; // true while mount, patch or unmount is changing the DOM
 
   // ---- Building nodes ------------------------------------------------------
 
@@ -164,6 +165,10 @@ export function connect(container, { send, raw = false, effects = {} } = {}) {
     // Decided here and now: a server can't answer in time.
     if (options.preventDefault) event.preventDefault();
     if (options.stopPropagation) event.stopPropagation();
+    // Events the page fires because of our own DOM changes, like the blur
+    // Chrome sends when a patch removes the focused element, aren't the
+    // user's doing. Mid-patch, their path points into a half-updated tree.
+    if (changing) return;
     const path = pathOf(el);
     if (!path) return;
     remember(el);
@@ -322,14 +327,24 @@ export function connect(container, { send, raw = false, effects = {} } = {}) {
   return {
     /** Render a whole tree, replacing whatever the container held. */
     mount(node) {
-      container.replaceChildren(create(node));
+      changing = true;
+      try {
+        container.replaceChildren(create(node));
+      } finally {
+        changing = false;
+      }
     },
 
     /** Apply a list of patches, strictly in order. */
     patch(patches) {
       echoed = new Map();
-      for (const patch of patches) applyPatch(patch);
-      echoed = new Map();
+      changing = true;
+      try {
+        for (const patch of patches) applyPatch(patch);
+      } finally {
+        changing = false;
+        echoed = new Map();
+      }
     },
 
     /** Run patcher instructions from Jorn.Effect, in order, after patching. */
@@ -348,7 +363,12 @@ export function connect(container, { send, raw = false, effects = {} } = {}) {
 
     /** Empty the container and stop reporting its events. */
     unmount() {
-      container.replaceChildren();
+      changing = true;
+      try {
+        container.replaceChildren();
+      } finally {
+        changing = false;
+      }
     },
   };
 }

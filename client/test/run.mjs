@@ -339,6 +339,27 @@ unit("detached elements stay quiet", () => {
   check(sent.length === 0, "no report from a removed element");
 });
 
+unit("events caused by a patch aren't reported", () => {
+  // Chrome fires blur when a patch removes the focused element. jsdom doesn't,
+  // so a custom element stands in: it blurs the input while it's being removed.
+  let input;
+  window.customElements.define(
+    "jorn-test-probe",
+    class extends window.HTMLElement {
+      disconnectedCallback() {
+        input.dispatchEvent(new window.Event("blur"));
+      }
+    },
+  );
+  const { container, sent, jorn } = setup();
+  jorn.mount(el("div", {}, [el("input", { events: { blur: opts() } }), el("jorn-test-probe")]));
+  input = container.firstChild.firstChild;
+  jorn.patch([{ op: "truncate", path: [], length: 1 }]);
+  check(sent.length === 0, "no report from an event fired mid-patch", { sent });
+  input.dispatchEvent(new window.Event("blur"));
+  check(sent.length === 1, "the same handler still reports afterwards", { sent });
+});
+
 unit("protocol violations throw", () => {
   const { jorn } = setup();
   jorn.mount(el("div", {}, [text("t")]));

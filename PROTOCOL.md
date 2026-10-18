@@ -74,7 +74,7 @@ An `id` that matches nothing, or a `client` name nobody registered, is reported 
 { "path": [1, 0], "name": "input", "event": { "target": { "value": "hi" } } }
 ```
 
-The client applies `preventDefault` and `stopPropagation` synchronously from the listener's options, then builds `event` from the dotted paths in `include`. When Elm runs in the same page (client mode), the client can pass the live event object instead, and `include` doesn't matter. In client mode, `Jorn.application` routes each event to the handler that produced it. Routing for hosts that do it themselves, like a server, lives in `Jorn.Internal.Event` for now and becomes public with the server runtime.
+The client applies `preventDefault` and `stopPropagation` synchronously from the listener's options, then builds `event` from the dotted paths in `include`. When Elm runs in the same page (client mode), the client can pass the live event object instead, and `include` doesn't matter. Events the browser fires as a result of applying patches, like the `blur` some browsers send when a patch removes the focused element, are not reported. In client mode, `Jorn.application` routes each event to the handler that produced it. Routing for hosts that do it themselves, like a server, lives in `Jorn.Internal.Event` for now and becomes public with the server runtime.
 
 ## Client mode runtime
 
