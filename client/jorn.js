@@ -30,9 +30,11 @@ const XHTML = "http://www.w3.org/1999/xhtml";
  * contents belong to Jorn from here on: its only child is the root node.
  *
  * @param {Element} container
- * @param {{ send: (event: { path: number[], name: string, event: unknown }) => void, raw?: boolean }} options
+ * `effects` holds the functions Elm can call by name with `Effect.client`.
+ *
+ * @param {{ send: (event: { path: number[], name: string, event: unknown }) => void, raw?: boolean, effects?: Record<string, (payload: unknown, context: { container: Element }) => void> }} options
  */
-export function connect(container, { send, raw = false } = {}) {
+export function connect(container, { send, raw = false, effects = {} } = {}) {
   if (!container || container.nodeType !== 1) {
     throw new TypeError("Jorn: connect needs a container element");
   }
@@ -278,6 +280,42 @@ export function connect(container, { send, raw = false } = {}) {
     }
   }
 
+  // ---- Instructions --------------------------------------------------------
+
+  function byId(id) {
+    const root = container.getRootNode();
+    const found = typeof root.getElementById === "function" ? root.getElementById(id) : doc.getElementById(id);
+    if (!found) console.warn(`Jorn: no element with id ${JSON.stringify(id)}`);
+    return found;
+  }
+
+  function runInstruction(instruction) {
+    switch (instruction.effect) {
+      case "focus":
+        byId(instruction.id)?.focus();
+        break;
+      case "blur":
+        byId(instruction.id)?.blur();
+        break;
+      case "scroll-into-view":
+        byId(instruction.id)?.scrollIntoView?.();
+        break;
+      case "event": {
+        const CustomEvent = doc.defaultView.CustomEvent;
+        container.dispatchEvent(new CustomEvent(instruction.name, { detail: instruction.detail, bubbles: true, composed: true }));
+        break;
+      }
+      case "client": {
+        const effect = Object.hasOwn(effects, instruction.name) ? effects[instruction.name] : undefined;
+        if (typeof effect === "function") effect(instruction.payload, { container });
+        else console.warn(`Jorn: no client effect called ${JSON.stringify(instruction.name)}`);
+        break;
+      }
+      default:
+        throw new Error(`Jorn: unknown effect ${JSON.stringify(instruction.effect)}`);
+    }
+  }
+
   return {
     /** Render a whole tree, replacing whatever the container held. */
     mount(node) {
@@ -289,6 +327,11 @@ export function connect(container, { send, raw = false } = {}) {
       echoed = new Map();
       for (const patch of patches) applyPatch(patch);
       echoed = new Map();
+    },
+
+    /** Run patcher instructions from Jorn.Effect, in order, after patching. */
+    run(instructions) {
+      for (const instruction of instructions) runInstruction(instruction);
     },
 
     /** The DOM node at a path, or `null`. Handy in tests. */

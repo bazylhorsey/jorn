@@ -56,7 +56,7 @@ Statuses: **done** is available today. **partial** is available with a stated di
 | Feature | Status | Notes |
 |---|---|---|
 | App runtime (`init`, `update`, `view` programs) | todo | |
-| Effects (`Effect.none`, `batch`, `map`, ...) | todo | |
+| Effects (`Effect.none`, `batch`, `map`, ...) | done | `Jorn.Effect`: Elm commands, focus and scrolling, paint timing, custom events and named client effects. Contexts come with #28. |
 | Browser patcher (small JavaScript) | done | [client/jorn.js](client/jorn.js). Checked against [tests/Reference.elm](tests/Reference.elm)'s semantics with randomized diffs in `client/test/`. |
 | Server runtime over a websocket (Node, Bun, Deno) | todo | |
 | Components as custom elements (attributes, properties, slots, form association) | todo | |

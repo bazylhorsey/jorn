@@ -24,9 +24,10 @@ jorn.patch(patches); // after every update, with the output of Jorn.Patch.encode
 
 | | |
 |---|---|
-| `connect(container, { send, raw })` | Take over `container`. Its only child is the root of your view from here on. |
+| `connect(container, { send, raw, effects })` | Take over `container`. Its only child is the root of your view from here on. `effects` maps names to the functions `Effect.client` can call. |
 | `.mount(node)` | Render a whole tree, replacing whatever was there. |
 | `.patch(patches)` | Apply patches strictly in order. Throws on a patch that doesn't fit the page, which means the page and the server have drifted apart. |
+| `.run(instructions)` | Run patcher instructions from `Jorn.Effect` (focus, scroll, custom events, named effects), in order. Call it after the patches they came with. |
 | `.nodeAt(path)` | The DOM node at a path, or `null`. |
 | `.unmount()` | Empty the container. |
 

@@ -54,6 +54,20 @@ A patch message is a JSON array of patches. **Apply them strictly in order.** Th
 
 **Resetting a property.** If the element's tag has the property natively, it goes back to its value on a freshly created element of that tag, unless an attribute of the same name is present, in which case it follows the attribute (`true` for boolean properties). Any other property is deleted.
 
+## Patcher instructions
+
+Effects that have to touch the DOM travel as instructions, applied in order right after the patches they arrive with, so they can refer to elements those patches created. Elements are found by `id`, within the root node of the container (its document or shadow root).
+
+| `effect` | Fields | Client behavior |
+|---|---|---|
+| `focus` | `id` | `focus()` the element |
+| `blur` | `id` | `blur()` the element |
+| `scroll-into-view` | `id` | `scrollIntoView()` the element |
+| `event` | `name`, `detail` | Dispatch a `CustomEvent` from the container that bubbles and is composed |
+| `client` | `name`, `payload` | Call the function the page registered under `name`, with `payload` |
+
+An `id` that matches nothing, or a `client` name nobody registered, is reported with a console warning and skipped.
+
 ## Events, client to Elm
 
 ```json

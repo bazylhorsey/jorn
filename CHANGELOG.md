@@ -16,6 +16,7 @@
 - Element attributes in `Jorn.Attribute` for links, resources, media, forms, meta, templates, tables and dates (#5). Boolean ones reset the DOM property by its own spelling (`readonly` resets `readOnly`). `selected` keeps an option's live selection in step like `checked` does, and `defaultValue`, `defaultChecked` and `defaultSelected` start a control without controlling it.
 - `role`, a generic `aria`, and one function per ARIA attribute in `Jorn.Attribute` (#6). They all take a `String`, since ARIA values are tokens like `"mixed"` or `"page"`.
 - Event helpers for mouse, keyboard, focus, blur and change (#7), and a `key` decoder. Each helper includes exactly the event fields it decodes, so server mode sends only those.
+- `Jorn.Effect` (#17): effects as values. `none`, `batch`, `map`, `fromCmd` for ordinary Elm commands, `focus`, `blur` and `scrollIntoView`, `beforePaint` and `afterPaint`, `event` to dispatch a DOM event from the app's container, and `client` to call a JavaScript function the page registered. The patcher instructions are specified in PROTOCOL.md.
 
 ## v0.0 (2026-10-10)
 
