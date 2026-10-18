@@ -29,7 +29,7 @@ Statuses: **done** is available today. **partial** is available with a stated di
 | `id`, `href`, `type_`, `name`, `placeholder`, `for` | done | |
 | `value`, `checked`, `disabled` | done | Encoded so server-rendered HTML and the live DOM agree. |
 | Global attributes (`style`, `title`, `hidden`, `tabindex`, `lang`, `data-*`, ...) | done | `style` declarations accumulate into one attribute, like `class`. `Attribute.none` for conditionals. |
-| Form, media, link, and table attributes | todo | |
+| Form, media, link, and table attributes | done | Plus `defaultValue`, `defaultChecked` and `defaultSelected` for controls you don't keep in step with your model. |
 | ARIA attributes and `role` | todo | |
 
 ## Events

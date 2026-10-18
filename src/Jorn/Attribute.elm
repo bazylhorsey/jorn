@@ -9,6 +9,23 @@ module Jorn.Attribute exposing
     , is, nonce
     , href, type_, name, placeholder, for
     , value, checked, disabled
+    , open, target, download, ping, rel, hreflang, referrerpolicy
+    , as_, blocking, integrity
+    , alt, src, srcset, sizes, crossorigin, usemap, ismap, width, height
+    , decoding, loading, fetchpriority, autoplay, controls, loop, muted
+    , playsinline, poster, preload
+    , action, method, enctype, acceptCharset, novalidate, autocomplete, accept
+    , required, readonly, multiple, min, max, step, minlength, maxlength
+    , pattern, size, cols, rows, list, dirname, form, formaction, formenctype
+    , formmethod, formnovalidate, formtarget, popovertarget, popovertargetaction
+    , alpha, colorspace
+    , selected
+    , defaultValue, defaultChecked, defaultSelected
+    , httpEquiv, content, charset, media
+    , shadowrootmode, shadowrootdelegatesfocus, shadowrootclonable
+    , shadowrootserializable
+    , colspan, rowspan, span, headers, scope, abbr
+    , datetime
     )
 
 {-| Attributes and properties.
@@ -67,6 +84,65 @@ These are encoded so that server-rendered HTML and the live DOM agree. See
 each function for details.
 
 @docs value, checked, disabled
+
+
+# Links
+
+@docs open, target, download, ping, rel, hreflang, referrerpolicy
+
+
+# Resources
+
+@docs as_, blocking, integrity
+
+
+# Images and media
+
+@docs alt, src, srcset, sizes, crossorigin, usemap, ismap, width, height
+@docs decoding, loading, fetchpriority, autoplay, controls, loop, muted
+@docs playsinline, poster, preload
+
+
+# Forms
+
+@docs action, method, enctype, acceptCharset, novalidate, autocomplete, accept
+@docs required, readonly, multiple, min, max, step, minlength, maxlength
+@docs pattern, size, cols, rows, list, dirname, form, formaction, formenctype
+@docs formmethod, formnovalidate, formtarget, popovertarget, popovertargetaction
+@docs alpha, colorspace
+
+
+# Selection
+
+@docs selected
+
+
+# Initial values
+
+For controls you don't want to keep in step with your model.
+
+@docs defaultValue, defaultChecked, defaultSelected
+
+
+# Meta
+
+@docs httpEquiv, content, charset, media
+
+
+# Templates
+
+@docs shadowrootmode, shadowrootdelegatesfocus, shadowrootclonable
+@docs shadowrootserializable
+
+
+# Tables
+
+@docs colspan, rowspan, span, headers, scope, abbr
+
+
+# Dates
+
+@docs datetime
 
 -}
 
@@ -410,16 +486,554 @@ disabled =
     booleanAttribute "disabled"
 
 
+{-| Whether a `details` or `dialog` is open. Encoded the same way as
+`checked`, since people open and close them.
+-}
+open : Bool -> Attribute msg
+open =
+    booleanAttribute "open"
+
+
+{-| Where to open a link or submit a form: `"_blank"`, `"_self"`, `"_parent"`,
+`"_top"`, or a name.
+-}
+target : String -> Attribute msg
+target =
+    attribute "target"
+
+
+{-| Download the link instead of opening it, as this filename. `""` keeps the
+server's name.
+-}
+download : String -> Attribute msg
+download =
+    attribute "download"
+
+
+{-| Space-separated URLs to notify when the link is followed.
+-}
+ping : String -> Attribute msg
+ping =
+    attribute "ping"
+
+
+{-| -}
+rel : String -> Attribute msg
+rel =
+    attribute "rel"
+
+
+{-| -}
+hreflang : String -> Attribute msg
+hreflang =
+    attribute "hreflang"
+
+
+{-| -}
+referrerpolicy : String -> Attribute msg
+referrerpolicy =
+    attribute "referrerpolicy"
+
+
+{-| `as`, on a preload `link`: what kind of resource it is.
+-}
+as_ : String -> Attribute msg
+as_ =
+    attribute "as"
+
+
+{-| -}
+blocking : String -> Attribute msg
+blocking =
+    attribute "blocking"
+
+
+{-| -}
+integrity : String -> Attribute msg
+integrity =
+    attribute "integrity"
+
+
+{-| -}
+alt : String -> Attribute msg
+alt =
+    attribute "alt"
+
+
+{-| -}
+src : String -> Attribute msg
+src =
+    attribute "src"
+
+
+{-| -}
+srcset : String -> Attribute msg
+srcset =
+    attribute "srcset"
+
+
+{-| -}
+sizes : String -> Attribute msg
+sizes =
+    attribute "sizes"
+
+
+{-| `"anonymous"` or `"use-credentials"`.
+-}
+crossorigin : String -> Attribute msg
+crossorigin =
+    attribute "crossorigin"
+
+
+{-| -}
+usemap : String -> Attribute msg
+usemap =
+    attribute "usemap"
+
+
+{-| Encoded the same way as `checked`.
+-}
+ismap : Bool -> Attribute msg
+ismap =
+    booleanAttributeWith "ismap" "isMap"
+
+
+{-| -}
+width : Int -> Attribute msg
+width n =
+    attribute "width" (String.fromInt n)
+
+
+{-| -}
+height : Int -> Attribute msg
+height n =
+    attribute "height" (String.fromInt n)
+
+
+{-| `"sync"`, `"async"` or `"auto"`.
+-}
+decoding : String -> Attribute msg
+decoding =
+    attribute "decoding"
+
+
+{-| `"eager"` or `"lazy"`.
+-}
+loading : String -> Attribute msg
+loading =
+    attribute "loading"
+
+
+{-| `"high"`, `"low"` or `"auto"`.
+-}
+fetchpriority : String -> Attribute msg
+fetchpriority =
+    attribute "fetchpriority"
+
+
+{-| Encoded the same way as `checked`.
+-}
+autoplay : Bool -> Attribute msg
+autoplay =
+    booleanAttribute "autoplay"
+
+
+{-| Encoded the same way as `checked`.
+-}
+controls : Bool -> Attribute msg
+controls =
+    booleanAttribute "controls"
+
+
+{-| Encoded the same way as `checked`.
+-}
+loop : Bool -> Attribute msg
+loop =
+    booleanAttribute "loop"
+
+
+{-| Encoded the same way as `checked`.
+-}
+muted : Bool -> Attribute msg
+muted =
+    booleanAttribute "muted"
+
+
+{-| Encoded the same way as `checked`.
+-}
+playsinline : Bool -> Attribute msg
+playsinline =
+    booleanAttributeWith "playsinline" "playsInline"
+
+
+{-| -}
+poster : String -> Attribute msg
+poster =
+    attribute "poster"
+
+
+{-| `"none"`, `"metadata"` or `"auto"`.
+-}
+preload : String -> Attribute msg
+preload =
+    attribute "preload"
+
+
+{-| -}
+action : String -> Attribute msg
+action =
+    attribute "action"
+
+
+{-| `"get"`, `"post"` or `"dialog"`.
+-}
+method : String -> Attribute msg
+method =
+    attribute "method"
+
+
+{-| -}
+enctype : String -> Attribute msg
+enctype =
+    attribute "enctype"
+
+
+{-| `accept-charset`.
+-}
+acceptCharset : String -> Attribute msg
+acceptCharset =
+    attribute "accept-charset"
+
+
+{-| Encoded the same way as `checked`.
+-}
+novalidate : Bool -> Attribute msg
+novalidate =
+    booleanAttributeWith "novalidate" "noValidate"
+
+
+{-| Like `"off"`, `"email"` or `"current-password"`.
+-}
+autocomplete : String -> Attribute msg
+autocomplete =
+    attribute "autocomplete"
+
+
+{-| File types a file input accepts, like `"image/*,.pdf"`.
+-}
+accept : String -> Attribute msg
+accept =
+    attribute "accept"
+
+
+{-| Encoded the same way as `checked`.
+-}
+required : Bool -> Attribute msg
+required =
+    booleanAttribute "required"
+
+
+{-| Encoded the same way as `checked`.
+-}
+readonly : Bool -> Attribute msg
+readonly =
+    booleanAttributeWith "readonly" "readOnly"
+
+
+{-| Encoded the same way as `checked`.
+-}
+multiple : Bool -> Attribute msg
+multiple =
+    booleanAttribute "multiple"
+
+
+{-| A string, since it can be a number or a date.
+-}
+min : String -> Attribute msg
+min =
+    attribute "min"
+
+
+{-| A string, since it can be a number or a date.
+-}
+max : String -> Attribute msg
+max =
+    attribute "max"
+
+
+{-| A number, or `"any"`.
+-}
+step : String -> Attribute msg
+step =
+    attribute "step"
+
+
+{-| -}
+minlength : Int -> Attribute msg
+minlength n =
+    attribute "minlength" (String.fromInt n)
+
+
+{-| -}
+maxlength : Int -> Attribute msg
+maxlength n =
+    attribute "maxlength" (String.fromInt n)
+
+
+{-| -}
+pattern : String -> Attribute msg
+pattern =
+    attribute "pattern"
+
+
+{-| -}
+size : Int -> Attribute msg
+size n =
+    attribute "size" (String.fromInt n)
+
+
+{-| -}
+cols : Int -> Attribute msg
+cols n =
+    attribute "cols" (String.fromInt n)
+
+
+{-| -}
+rows : Int -> Attribute msg
+rows n =
+    attribute "rows" (String.fromInt n)
+
+
+{-| The id of a `datalist` with suggestions.
+-}
+list : String -> Attribute msg
+list =
+    attribute "list"
+
+
+{-| -}
+dirname : String -> Attribute msg
+dirname =
+    attribute "dirname"
+
+
+{-| The id of the form a control belongs to, when it isn't inside it.
+-}
+form : String -> Attribute msg
+form =
+    attribute "form"
+
+
+{-| -}
+formaction : String -> Attribute msg
+formaction =
+    attribute "formaction"
+
+
+{-| -}
+formenctype : String -> Attribute msg
+formenctype =
+    attribute "formenctype"
+
+
+{-| -}
+formmethod : String -> Attribute msg
+formmethod =
+    attribute "formmethod"
+
+
+{-| Encoded the same way as `checked`.
+-}
+formnovalidate : Bool -> Attribute msg
+formnovalidate =
+    booleanAttributeWith "formnovalidate" "formNoValidate"
+
+
+{-| -}
+formtarget : String -> Attribute msg
+formtarget =
+    attribute "formtarget"
+
+
+{-| -}
+popovertarget : String -> Attribute msg
+popovertarget =
+    attribute "popovertarget"
+
+
+{-| `"show"`, `"hide"` or `"toggle"`.
+-}
+popovertargetaction : String -> Attribute msg
+popovertargetaction =
+    attribute "popovertargetaction"
+
+
+{-| Let a color input pick an alpha value.
+-}
+alpha : Bool -> Attribute msg
+alpha =
+    booleanAttribute "alpha"
+
+
+{-| `"limited-srgb"` or `"display-p3"`.
+-}
+colorspace : String -> Attribute msg
+colorspace =
+    attribute "colorspace"
+
+
+{-| Whether an `option` is selected. Sent as an attribute and kept in step
+with the live selection, like `checked`.
+-}
+selected : Bool -> Attribute msg
+selected =
+    booleanAttribute "selected"
+
+
+{-| The value a control starts with, without controlling it afterwards: what
+someone types stays, even when this changes. Use `value` instead to keep the
+control in step with your model. Sent as the `defaultValue` property, which
+the browser reflects into the `value` attribute.
+-}
+defaultValue : String -> Attribute msg
+defaultValue v =
+    property "defaultValue" (Encode.string v)
+
+
+{-| Whether a checkbox or radio starts out checked, without controlling it
+afterwards. Use `checked` instead to keep it in step with your model.
+-}
+defaultChecked : Bool -> Attribute msg
+defaultChecked on =
+    property "defaultChecked" (Encode.bool on)
+
+
+{-| Whether an `option` starts out selected. Unlike `selected`, Jorn doesn't
+copy it onto the live selection, so the option someone picks stays picked. Use
+`selected` to keep the selection in step with your model.
+-}
+defaultSelected : Bool -> Attribute msg
+defaultSelected on =
+    property "defaultSelected" (Encode.bool on)
+
+
+{-| `http-equiv`.
+-}
+httpEquiv : String -> Attribute msg
+httpEquiv =
+    attribute "http-equiv"
+
+
+{-| -}
+content : String -> Attribute msg
+content =
+    attribute "content"
+
+
+{-| -}
+charset : String -> Attribute msg
+charset =
+    attribute "charset"
+
+
+{-| A media query, like `"(prefers-color-scheme: dark)"`.
+-}
+media : String -> Attribute msg
+media =
+    attribute "media"
+
+
+{-| Make a `template` a declarative shadow root: `"open"` or `"closed"`.
+-}
+shadowrootmode : String -> Attribute msg
+shadowrootmode =
+    attribute "shadowrootmode"
+
+
+{-| Encoded the same way as `checked`.
+-}
+shadowrootdelegatesfocus : Bool -> Attribute msg
+shadowrootdelegatesfocus =
+    booleanAttributeWith "shadowrootdelegatesfocus" "shadowRootDelegatesFocus"
+
+
+{-| Encoded the same way as `checked`.
+-}
+shadowrootclonable : Bool -> Attribute msg
+shadowrootclonable =
+    booleanAttributeWith "shadowrootclonable" "shadowRootClonable"
+
+
+{-| Encoded the same way as `checked`.
+-}
+shadowrootserializable : Bool -> Attribute msg
+shadowrootserializable =
+    booleanAttributeWith "shadowrootserializable" "shadowRootSerializable"
+
+
+{-| -}
+colspan : Int -> Attribute msg
+colspan n =
+    attribute "colspan" (String.fromInt n)
+
+
+{-| -}
+rowspan : Int -> Attribute msg
+rowspan n =
+    attribute "rowspan" (String.fromInt n)
+
+
+{-| How many columns a `col` or `colgroup` spans.
+-}
+span : Int -> Attribute msg
+span n =
+    attribute "span" (String.fromInt n)
+
+
+{-| Space-separated ids of the header cells for this cell.
+-}
+headers : String -> Attribute msg
+headers =
+    attribute "headers"
+
+
+{-| `"row"`, `"col"`, `"rowgroup"` or `"colgroup"`.
+-}
+scope : String -> Attribute msg
+scope =
+    attribute "scope"
+
+
+{-| -}
+abbr : String -> Attribute msg
+abbr =
+    attribute "abbr"
+
+
+{-| -}
+datetime : String -> Attribute msg
+datetime =
+    attribute "datetime"
+
+
 {-| Boolean attributes: present (with an empty value) when true, and a `false`
 property when false, so the live DOM state is reset.
 -}
 booleanAttribute : String -> Bool -> Attribute msg
-booleanAttribute attrName on =
+booleanAttribute attrName =
+    booleanAttributeWith attrName attrName
+
+
+{-| For boolean attributes whose DOM property is spelled differently, like
+`readonly` and `readOnly`.
+-}
+booleanAttributeWith : String -> String -> Bool -> Attribute msg
+booleanAttributeWith attrName propName on =
     if on then
         attribute attrName ""
 
     else
-        property attrName (Encode.bool False)
+        property propName (Encode.bool False)
 
 
 trueFalse : Bool -> String

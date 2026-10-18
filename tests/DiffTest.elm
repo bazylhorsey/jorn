@@ -126,6 +126,28 @@ unit =
             \_ ->
                 Jorn.Patch.diff (Html.div [ Attr.hidden True ] []) (Html.div [ Attr.hidden False ] [])
                     |> expectPatches [ RemoveAttribute [] "hidden", SetProperty [] "hidden" (Encode.bool False) ]
+        , test "element attributes encode as the HTML spells them" <|
+            \_ ->
+                node (Html.link [ Attr.as_ "font", Attr.crossorigin "anonymous", Attr.width 40, Attr.httpEquiv "refresh", Attr.acceptCharset "utf-8" ])
+                    |> Expect.equal
+                        (node
+                            (Html.link
+                                [ Attr.attribute "as" "font"
+                                , Attr.attribute "crossorigin" "anonymous"
+                                , Attr.attribute "width" "40"
+                                , Attr.attribute "http-equiv" "refresh"
+                                , Attr.attribute "accept-charset" "utf-8"
+                                ]
+                            )
+                        )
+        , test "a boolean attribute resets the DOM property, spelled the DOM's way" <|
+            \_ ->
+                Jorn.Patch.diff (Html.input [ Attr.readonly True ]) (Html.input [ Attr.readonly False ])
+                    |> expectPatches [ RemoveAttribute [] "readonly", SetProperty [] "readOnly" (Encode.bool False) ]
+        , test "initial values are properties, so they never control the live state" <|
+            \_ ->
+                node (Html.input [ Attr.defaultValue "a", Attr.defaultChecked True ])
+                    |> Expect.equal (node (Html.input [ Attr.property "defaultValue" (Encode.string "a"), Attr.property "defaultChecked" (Encode.bool True) ]))
         , test "property change" <|
             \_ ->
                 Jorn.Patch.diff

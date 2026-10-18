@@ -236,6 +236,51 @@ unit("keyed moves carry the DOM node and its live state", () => {
   check(JSON.stringify(sent.at(-1)?.path) === "[2]", "a moved node reports its new path", { sent });
 });
 
+unit("default values start a control without controlling it", () => {
+  const { container, jorn } = setup();
+  jorn.mount(
+    el("form", {}, [
+      el("input", { props: { defaultValue: "a" } }),
+      el("input", { attrs: { type: "checkbox" }, props: { defaultChecked: true } }),
+    ]),
+  );
+  const [input, box] = container.firstChild.childNodes;
+  check(input.value === "a" && box.checked === true, "initial values apply", { value: input.value, checked: box.checked });
+  input.value = "typed";
+  box.checked = false;
+  jorn.patch([
+    { op: "set-prop", path: [0], name: "defaultValue", value: "b" },
+    { op: "set-prop", path: [1], name: "defaultChecked", value: false },
+  ]);
+  check(input.value === "typed", "typing survives a new defaultValue", { got: input.value });
+  check(input.getAttribute("value") === "b", "defaultValue reflects into the attribute");
+  check(box.checked === false && !box.hasAttribute("checked"), "defaultChecked reflects without touching the box");
+  jorn.patch([{ op: "set-prop", path: [1], name: "defaultChecked", value: true }]);
+  check(box.checked === false, "a clicked box keeps its state", { got: box.checked });
+  jorn.patch([{ op: "remove-prop", path: [0], name: "defaultValue" }]);
+  check(input.value === "typed", "removing defaultValue leaves typing alone", { got: input.value });
+});
+
+unit("selected follows the model, defaultSelected only starts it", () => {
+  const { container, jorn } = setup();
+  const option = (value, more = {}) => el("option", { attrs: { value, ...(more.attrs ?? {}) }, props: more.props ?? {} }, [text(value)]);
+  jorn.mount(el("select", {}, [option("a"), option("b", { attrs: { selected: "" } }), option("c")]));
+  const select = container.firstChild;
+  check(select.value === "b", "selected attribute picks the option", { got: select.value });
+  select.value = "a";
+  jorn.patch([
+    { op: "remove-attr", path: [1], name: "selected" },
+    { op: "set-attr", path: [2], name: "selected", value: "" },
+  ]);
+  check(select.value === "c", "a new selected option applies even after the user chose", { got: select.value });
+  jorn.mount(el("select", {}, [option("a"), option("b", { props: { defaultSelected: true } })]));
+  const second = container.firstChild;
+  check(second.value === "b", "defaultSelected starts the selection", { got: second.value });
+  second.value = "a";
+  jorn.patch([{ op: "set-prop", path: [1], name: "defaultSelected", value: false }]);
+  check(second.value === "a" && !second.options[1].hasAttribute("selected"), "the user's choice stays", { got: second.value });
+});
+
 unit("detached elements stay quiet", () => {
   const { container, sent, jorn } = setup();
   jorn.mount(el("div", {}, [el("button", { events: { click: opts() } })]));
