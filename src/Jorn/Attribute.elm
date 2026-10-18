@@ -1,6 +1,7 @@
-module Jorn.Html.Attributes exposing
-    ( attribute, property
-    , class, classList, id, href, type_, name, placeholder, for
+module Jorn.Attribute exposing
+    ( Attribute
+    , attribute, property
+    , class, classes, id, href, type_, name, placeholder, for
     , value, checked, disabled
     )
 
@@ -11,6 +12,11 @@ JSON values set directly on the DOM object, which is what you want for live
 state like an input's `value`.
 
 
+# Types
+
+@docs Attribute
+
+
 # Primitives
 
 @docs attribute, property
@@ -18,7 +24,7 @@ state like an input's `value`.
 
 # Attributes
 
-@docs class, classList, id, href, type_, name, placeholder, for
+@docs class, classes, id, href, type_, name, placeholder, for
 
 
 # Form controls
@@ -30,9 +36,14 @@ each function for details.
 
 -}
 
-import Jorn.Html exposing (Attribute)
 import Jorn.Internal.Vdom as Vdom
 import Json.Encode as Encode exposing (Value)
+
+
+{-| An attribute, property, or event handler on an element.
+-}
+type alias Attribute msg =
+    Vdom.Attribute msg
 
 
 {-| Any HTML attribute. Multiple `class` attributes on one element are joined.
@@ -57,9 +68,9 @@ class =
 
 {-| Include each class whose flag is `True`.
 -}
-classList : List ( String, Bool ) -> Attribute msg
-classList classes =
-    classes
+classes : List ( String, Bool ) -> Attribute msg
+classes classList =
+    classList
         |> List.filter Tuple.second
         |> List.map Tuple.first
         |> String.join " "

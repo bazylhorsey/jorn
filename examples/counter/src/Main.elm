@@ -11,10 +11,11 @@ what Jorn builds next.
 
 -}
 
-import Jorn.Event
-import Jorn.Html as Html exposing (Html)
-import Jorn.Html.Attributes as Attr
-import Jorn.Html.Events as Events
+import Jorn.Attribute as Attr
+import Jorn.Element as Element exposing (Element)
+import Jorn.Element.Html as Html
+import Jorn.Event as Events
+import Jorn.Internal.Event as Routing
 import Jorn.Patch
 import Json.Decode as Decode
 import Json.Encode as Encode exposing (Value)
@@ -60,14 +61,14 @@ update msg model =
             { model | name = name }
 
 
-view : Model -> Html Msg
+view : Model -> Element Msg
 view model =
     Html.main_ []
-        [ Html.h1 [] [ Html.text ("Hello, " ++ model.name) ]
+        [ Html.h1 [] [ Element.text ("Hello, " ++ model.name) ]
         , Html.input [ Attr.value model.name, Events.onInput Rename ] []
-        , Html.button [ Events.onClick Decrement ] [ Html.text "-" ]
-        , Html.span [] [ Html.text (String.fromInt model.count) ]
-        , Html.button [ Events.onClick Increment ] [ Html.text "+" ]
+        , Html.button [ Events.onClick Decrement ] [ Element.text "-" ]
+        , Html.span [] [ Element.text (String.fromInt model.count) ]
+        , Html.button [ Events.onClick Increment ] [ Element.text "+" ]
         ]
 
 
@@ -88,12 +89,12 @@ receive : Value -> Model -> ( Model, Cmd msg )
 receive raw model =
     let
         routed =
-            Decode.decodeValue Jorn.Event.decoder raw
+            Decode.decodeValue Routing.decoder raw
                 |> Result.mapError Decode.errorToString
                 |> Result.andThen
                     (\incoming ->
-                        Jorn.Event.route incoming (view model)
-                            |> Result.mapError Jorn.Event.errorToString
+                        Routing.route incoming (view model)
+                            |> Result.mapError Routing.errorToString
                     )
     in
     case routed of

@@ -13,7 +13,7 @@ jorn.mount(tree);    // once, with the output of Jorn.Patch.encodeHtml
 jorn.patch(patches); // after every update, with the output of Jorn.Patch.encode
 ```
 
-`send` receives `{ path, name, event }`, the message `Jorn.Event.decoder` reads.
+`send` receives `{ path, name, event }`, the message the client event decoder reads.
 
 ## Two modes
 
@@ -39,4 +39,4 @@ jorn.patch(patches); // after every update, with the output of Jorn.Patch.encode
 
 ## Tests
 
-`test/run.mjs` runs in jsdom: unit tests for live form state and events, then thousands of random view sequences generated in Elm, checking the DOM after every patch and routing every event back through `Jorn.Event`. See [CONTRIBUTING.md](../CONTRIBUTING.md) for how to run it.
+`test/run.mjs` runs in jsdom: unit tests for live form state and events, then thousands of random view sequences generated in Elm, checking the DOM after every patch and routing every event back through the event router. See [CONTRIBUTING.md](../CONTRIBUTING.md) for how to run it.

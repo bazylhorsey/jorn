@@ -15,7 +15,7 @@ The wire format is specified in
 
 -}
 
-import Jorn.Html exposing (Html)
+import Jorn.Element exposing (Element)
 import Jorn.Internal.Patch as Internal
 import Jorn.Internal.Vdom as Vdom
 import Json.Encode exposing (Value)
@@ -30,7 +30,7 @@ type alias Patch =
 {-| The patches that turn the first tree into the second. Applying them in
 order is always valid. Identical trees produce `[]`.
 -}
-diff : Html msg -> Html msg -> List Patch
+diff : Element msg -> Element msg -> List Patch
 diff =
     Internal.diff
 
@@ -44,6 +44,6 @@ encode =
 
 {-| Encode a whole tree, for the initial mount.
 -}
-encodeHtml : Html msg -> Value
-encodeHtml html =
-    Vdom.encodeNode (Vdom.toNode html)
+encodeHtml : Element msg -> Value
+encodeHtml element =
+    Vdom.encodeNode (Vdom.toNode element)

@@ -11,7 +11,7 @@ every patch aimed at its existing children.
 -}
 
 import Dict exposing (Dict)
-import Jorn.Internal.Vdom as Vdom exposing (EventOptions, Html(..), Node)
+import Jorn.Internal.Vdom as Vdom exposing (Element(..), EventOptions, Node)
 import Json.Encode as Encode exposing (Value)
 
 
@@ -34,7 +34,7 @@ type Patch
     | Truncate Path Int
 
 
-diff : Html msg -> Html msg -> List Patch
+diff : Element msg -> Element msg -> List Patch
 diff old new =
     List.reverse (diffHelp [] old new [])
 
@@ -42,7 +42,7 @@ diff old new =
 {-| `reversedPath` and the accumulator are both built backwards for cheap
 consing; each is reversed exactly once.
 -}
-diffHelp : List Int -> Html msg -> Html msg -> List Patch -> List Patch
+diffHelp : List Int -> Element msg -> Element msg -> List Patch -> List Patch
 diffHelp reversedPath old new acc =
     case ( old, new ) of
         ( Text a, Text b ) ->
@@ -73,7 +73,7 @@ diffHelp reversedPath old new acc =
             Replace (List.reverse reversedPath) (Vdom.toNode new) :: acc
 
 
-diffChildren : List Int -> Int -> List (Html msg) -> List (Html msg) -> List Patch -> List Patch
+diffChildren : List Int -> Int -> List (Element msg) -> List (Element msg) -> List Patch -> List Patch
 diffChildren reversedPath index olds news acc =
     case ( olds, news ) of
         ( o :: os, n :: ns ) ->
