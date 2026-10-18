@@ -213,6 +213,29 @@ unit("paths follow the tree after patches", () => {
   check(container.innerHTML === "<p>new root</p>", "replace root");
 });
 
+unit("keyed moves carry the DOM node and its live state", () => {
+  const { container, sent, jorn } = setup();
+  const item = (name) => el("input", { attrs: { name }, events: { input: opts({ include: ["target.value"] }) } });
+  jorn.mount(el("ul", {}, [item("a"), item("b"), item("c")]));
+  const [a, b, c] = container.firstChild.childNodes;
+  a.value = "typed into a";
+  jorn.patch([{ op: "move", path: [], from: 0, to: 2 }]);
+  check([...container.firstChild.childNodes].map((n) => n.name).join() === "b,c,a", "move to the end", { got: container.innerHTML });
+  check(container.firstChild.lastChild === a && a.value === "typed into a", "same node, same value");
+  jorn.patch([{ op: "move", path: [], from: 2, to: 0 }]);
+  check(container.firstChild.firstChild === a, "move to the front");
+  jorn.patch([{ op: "move", path: [], from: 0, to: 1 }]);
+  check([...container.firstChild.childNodes].map((n) => n.name).join() === "b,a,c", "move by one");
+  jorn.patch([{ op: "remove", path: [], index: 0 }]);
+  check(!b.isConnected && container.firstChild.firstChild === a, "remove");
+  jorn.patch([{ op: "insert", path: [], index: 1, node: item("d") }]);
+  check([...container.firstChild.childNodes].map((n) => n.name).join() === "a,d,c", "insert in the middle", { got: container.innerHTML });
+  jorn.patch([{ op: "insert", path: [], index: 3, node: item("e") }]);
+  check(container.firstChild.lastChild.name === "e", "insert at the end");
+  c.dispatchEvent(new window.Event("input"));
+  check(JSON.stringify(sent.at(-1)?.path) === "[2]", "a moved node reports its new path", { sent });
+});
+
 unit("detached elements stay quiet", () => {
   const { container, sent, jorn } = setup();
   jorn.mount(el("div", {}, [el("button", { events: { click: opts() } })]));
@@ -237,6 +260,10 @@ unit("protocol violations throw", () => {
   check(throws({ op: "set-attr", path: [0], name: "a", value: "b" }), "attr on text throws");
   check(throws({ op: "set-text", path: [], text: "x" }), "text on element throws");
   check(throws({ op: "explode", path: [] }), "unknown op throws");
+  check(throws({ op: "insert", path: [], index: 2, node: text("x") }), "insert past the end throws");
+  check(throws({ op: "move", path: [], from: 1, to: 0 }), "move of a missing child throws");
+  check(throws({ op: "move", path: [], from: 0, to: 1 }), "move past the end throws");
+  check(throws({ op: "remove", path: [], index: 1 }), "remove of a missing child throws");
 });
 
 unit("late updates don't overwrite newer typing", () => {
@@ -356,6 +383,16 @@ function elementsOf(node, out = []) {
   return out;
 }
 
+// Nodes matched by the diff, by key or by position, must be the same DOM
+// nodes afterwards: moved, never recreated.
+let kept = 0;
+function checkKept(jorn, pairs, before, step, caseId) {
+  for (const [i, [from, to]] of pairs.entries()) {
+    kept++;
+    if (jorn.nodeAt(to) !== before[i]) fail(`${step} recreated a node it should have kept`, { caseId, from, to });
+  }
+}
+
 const t0 = performance.now();
 const cases = await ask("generate", { seed: SEED, count: CASES });
 let patches = 0;
@@ -366,14 +403,18 @@ for (let caseId = 0; caseId < cases.length; caseId++) {
   try {
     const { container, sent, jorn } = setup();
     jorn.mount(c.a);
+    const keptAB = c.keepAB.map(([from]) => jorn.nodeAt(from));
     jorn.patch(c.ab);
     patches += c.ab.length;
+    checkKept(jorn, c.keepAB, keptAB, "A->B", caseId);
     const afterB = JSON.stringify(actual(container.firstChild));
     const wantB = JSON.stringify(expected(c.b));
     if (afterB !== wantB) fail("A->B differs from B", { caseId, got: afterB, want: wantB, patches: c.ab });
 
+    const keptBC = c.keepBC.map(([from]) => jorn.nodeAt(from));
     jorn.patch(c.bc);
     patches += c.bc.length;
+    checkKept(jorn, c.keepBC, keptBC, "B->C", caseId);
     const afterC = JSON.stringify(actual(container.firstChild));
     const wantC = JSON.stringify(expected(c.c));
     if (afterC !== wantC) fail("B->C differs from C", { caseId, got: afterC, want: wantC, patches: c.bc });
@@ -413,7 +454,7 @@ for (let caseId = 0; caseId < cases.length; caseId++) {
 
 const seconds = ((performance.now() - t0) / 1000).toFixed(1);
 console.log(`unit tests: ${unitFailures ? `${unitFailures} problems` : "passed"}`);
-console.log(`${cases.length} random cases, ${patches} patches applied, ${events} events fired, seed ${SEED}, ${seconds}s`);
+console.log(`${cases.length} random cases, ${patches} patches applied, ${kept} nodes checked for keeping, ${events} events fired, seed ${SEED}, ${seconds}s`);
 if (failed) {
   console.log(`FAILED: ${failed} problems`);
   for (const f of failures) console.log(JSON.stringify(f, null, 2).slice(0, 3000));

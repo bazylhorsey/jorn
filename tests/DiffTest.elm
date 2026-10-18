@@ -5,6 +5,7 @@ import Fuzz exposing (Fuzzer)
 import Jorn.Attribute as Attr
 import Jorn.Element as Element exposing (Element)
 import Jorn.Element.Html as Html
+import Jorn.Element.Keyed as Keyed
 import Jorn.Event as Events
 import Jorn.Internal.Patch exposing (Patch(..))
 import Jorn.Internal.Vdom as Vdom
@@ -19,6 +20,7 @@ suite : Test
 suite =
     describe "Jorn.Patch.diff"
         [ unit
+        , keyed
         , wire
         , properties
         ]
@@ -226,6 +228,109 @@ unit =
         ]
 
 
+keyed : Test
+keyed =
+    let
+        items keys =
+            Keyed.ul [] (List.map (\k -> ( k, Html.li [] [ Element.text k ] )) keys)
+
+        count predicate patches =
+            List.length (List.filter predicate patches)
+
+        isMove patch =
+            case patch of
+                Move _ _ _ ->
+                    True
+
+                _ ->
+                    False
+
+        structural patch =
+            case patch of
+                Move _ _ _ ->
+                    True
+
+                Insert _ _ _ ->
+                    True
+
+                Remove _ _ ->
+                    True
+
+                _ ->
+                    False
+    in
+    describe "keyed children"
+        [ test "the same keys in the same order produce no patches" <|
+            \_ ->
+                Jorn.Patch.diff (items [ "a", "b", "c" ]) (items [ "a", "b", "c" ])
+                    |> expectPatches []
+        , test "removing the first item is one remove, not a rewrite" <|
+            \_ ->
+                Jorn.Patch.diff (items [ "a", "b", "c", "d" ]) (items [ "b", "c", "d" ])
+                    |> expectPatches [ Remove [] 0 ]
+        , test "inserting in the middle is one insert" <|
+            \_ ->
+                Jorn.Patch.diff (items [ "a", "c" ]) (items [ "a", "b", "c" ])
+                    |> expectPatches [ Insert [] 1 (node (Html.li [] [ Element.text "b" ])) ]
+        , test "moving the first item to the end is one move" <|
+            \_ ->
+                Jorn.Patch.diff (items [ "a", "b", "c", "d", "e" ]) (items [ "b", "c", "d", "e", "a" ])
+                    |> expectPatches [ Move [] 0 4 ]
+        , test "moving the last item to the front is one move" <|
+            \_ ->
+                Jorn.Patch.diff (items [ "a", "b", "c", "d", "e" ]) (items [ "e", "a", "b", "c", "d" ])
+                    |> expectPatches [ Move [] 4 0 ]
+        , test "swapping two items moves only those that must move" <|
+            \_ ->
+                Jorn.Patch.diff (items [ "a", "b", "c", "d", "e" ]) (items [ "a", "d", "c", "b", "e" ])
+                    |> count isMove
+                    |> Expect.equal 2
+        , test "reversing n items takes n - 1 moves" <|
+            \_ ->
+                let
+                    keys =
+                        List.map String.fromInt (List.range 1 50)
+                in
+                Jorn.Patch.diff (items keys) (items (List.reverse keys))
+                    |> count isMove
+                    |> Expect.equal 49
+        , test "a moved item is diffed at its new position" <|
+            \_ ->
+                Jorn.Patch.diff
+                    (Keyed.ul [] [ ( "a", Element.text "1" ), ( "b", Element.text "2" ) ])
+                    (Keyed.ul [] [ ( "b", Element.text "2" ), ( "a", Element.text "one" ) ])
+                    |> expectPatches [ Move [] 1 0, SetText [ 1 ] "one" ]
+        , test "duplicate keys match in order" <|
+            \_ ->
+                Jorn.Patch.diff
+                    (Keyed.ul [] [ ( "x", Element.text "1" ), ( "x", Element.text "2" ) ])
+                    (Keyed.ul [] [ ( "x", Element.text "1" ), ( "x", Element.text "2" ), ( "x", Element.text "3" ) ])
+                    |> expectPatches [ Insert [] 2 (node (Element.text "3")) ]
+        , test "unkeyed children among keyed ones match by their own order" <|
+            \_ ->
+                Jorn.Patch.diff
+                    (Html.ul [] [ Element.text "header", Keyed.fragment [ ( "a", Element.text "a" ), ( "b", Element.text "b" ) ] ])
+                    (Html.ul [] [ Element.text "header", Keyed.fragment [ ( "b", Element.text "b" ), ( "a", Element.text "a" ) ] ])
+                    |> count structural
+                    |> Expect.equal 1
+        , test "a changed tag under the same key is replaced in place" <|
+            \_ ->
+                Jorn.Patch.diff
+                    (Keyed.div [] [ ( "a", Html.p [] [] ), ( "b", Html.p [] [] ) ])
+                    (Keyed.div [] [ ( "b", Html.p [] [] ), ( "a", Html.span [] [] ) ])
+                    |> expectPatches [ Move [] 1 0, Replace [ 1 ] (node (Html.span [] [])) ]
+        , test "keys never reach the wire" <|
+            \_ ->
+                Vdom.toNode (items [ "b", "a" ])
+                    |> Expect.equal (Vdom.toNode (Html.ul [] [ Html.li [] [ Element.text "b" ], Html.li [] [ Element.text "a" ] ]))
+        , fuzz2 (Fuzz.list (Fuzz.oneOfValues [ "a", "b", "c", "d", "e", "f" ])) (Fuzz.list (Fuzz.oneOfValues [ "a", "b", "c", "d", "e", "f" ])) "any reordering round-trips" <|
+            \a b ->
+                Reference.apply (Jorn.Patch.diff (items a) (items b)) (Vdom.toNode (items a))
+                    |> Maybe.map Reference.render
+                    |> Expect.equal (Just (Reference.render (Vdom.toNode (items b))))
+        ]
+
+
 {-| Pins the wire format. If this test changes, the protocol changed, and the
 JS client and PROTOCOL.md have to change with it.
 -}
@@ -255,6 +360,20 @@ wire =
                     |> Encode.encode 0
                     |> Expect.equal
                         """[{"op":"append","path":[],"nodes":[{"tag":"span","namespace":"","attrs":{},"props":{},"events":{},"children":[]}]}]"""
+        , test "golden keyed encoding" <|
+            \_ ->
+                Jorn.Patch.diff
+                    (Keyed.ul [] [ ( "a", Html.li [] [] ), ( "b", Html.li [] [] ), ( "c", Html.li [] [] ) ])
+                    (Keyed.ul [] [ ( "c", Html.li [] [] ), ( "a", Html.li [] [] ), ( "d", Element.text "d" ) ])
+                    |> Jorn.Patch.encode
+                    |> Encode.encode 0
+                    |> Expect.equal
+                        ("["
+                            ++ """{"op":"remove","path":[],"index":1},"""
+                            ++ """{"op":"insert","path":[],"index":2,"node":{"text":"d"}},"""
+                            ++ """{"op":"move","path":[],"from":1,"to":0}"""
+                            ++ "]"
+                        )
         , test "golden mount encoding" <|
             \_ ->
                 Html.button [ Attr.disabled True, Events.onClick () ] [ Element.text "go" ]
@@ -318,7 +437,23 @@ html depth =
                     (Fuzz.listOfLengthBetween 0 3 (html (depth - 1)))
               )
             , ( 1, Fuzz.map Element.fragment (Fuzz.listOfLengthBetween 0 3 (html (depth - 1))) )
+            , ( 2
+              , Fuzz.map2 (Vdom.Element "" "ul" Vdom.Normal)
+                    (Fuzz.listOfLengthBetween 0 2 attribute)
+                    (Fuzz.listOfLengthBetween 0 5 (keyedChild (depth - 1)))
+              )
             ]
+
+
+{-| Mostly keyed, from a small alphabet so keys repeat and lists overlap, with
+the odd unkeyed child mixed in.
+-}
+keyedChild : Int -> Fuzzer (Element String)
+keyedChild depth =
+    Fuzz.frequency
+        [ ( 6, Fuzz.map2 Vdom.Keyed (Fuzz.oneOfValues [ "a", "b", "c", "d" ]) (html depth) )
+        , ( 1, html depth )
+        ]
 
 
 {-| Options are functions, so pick them from a set rather than build one.

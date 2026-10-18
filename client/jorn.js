@@ -195,6 +195,12 @@ export function connect(container, { send, raw = false } = {}) {
     return node;
   }
 
+  function childAt(el, index, path) {
+    const child = el.childNodes[index];
+    if (!child) throw new Error(`Jorn: no child ${index} at path [${path}]`);
+    return child;
+  }
+
   function applyPatch(patch) {
     switch (patch.op) {
       case "replace": {
@@ -242,6 +248,29 @@ export function connect(container, { send, raw = false } = {}) {
       case "truncate": {
         const el = elementAt(patch.path);
         while (el.childNodes.length > patch.length) el.removeChild(el.lastChild);
+        break;
+      }
+      case "insert": {
+        const el = elementAt(patch.path);
+        if (patch.index < 0 || patch.index > el.childNodes.length) throw new Error(`Jorn: no index ${patch.index} at path [${patch.path}]`);
+        el.insertBefore(create(patch.node), el.childNodes[patch.index] ?? null);
+        break;
+      }
+      case "move": {
+        const el = elementAt(patch.path);
+        const child = childAt(el, patch.from, patch.path);
+        // `to` counts siblings with the child already taken out.
+        if (patch.to < 0 || patch.to >= el.childNodes.length) throw new Error(`Jorn: no index ${patch.to} at path [${patch.path}]`);
+        const before = el.childNodes[patch.to < patch.from ? patch.to : patch.to + 1] ?? null;
+        // moveBefore keeps focus, selection and running animations where
+        // insertBefore would reset them. Older browsers fall back.
+        if (typeof el.moveBefore === "function") el.moveBefore(child, before);
+        else el.insertBefore(child, before);
+        break;
+      }
+      case "remove": {
+        const el = elementAt(patch.path);
+        el.removeChild(childAt(el, patch.index, patch.path));
         break;
       }
       default:

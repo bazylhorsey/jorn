@@ -8,6 +8,7 @@
         "Jorn.Attribute",
         "Jorn.Element",
         "Jorn.Element.Html",
+        "Jorn.Element.Keyed",
         "Jorn.Event",
         "Jorn.Patch"
     ],

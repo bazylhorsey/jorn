@@ -69,6 +69,65 @@ applyOne patch root =
         Truncate path length ->
             element path (\r -> { r | children = List.take length r.children }) root
 
+        Insert path index node ->
+            element path (\r -> { r | children = List.take index r.children ++ node :: List.drop index r.children }) root
+                |> Maybe.andThen (validIndex index (index <= childCount path root))
+
+        Move path from to ->
+            childAt path from root
+                |> Maybe.andThen
+                    (\moved ->
+                        element path
+                            (\r ->
+                                let
+                                    without =
+                                        List.take from r.children ++ List.drop (from + 1) r.children
+                                in
+                                { r | children = List.take to without ++ moved :: List.drop to without }
+                            )
+                            root
+                    )
+                |> Maybe.andThen (validIndex to (to < childCount path root))
+
+        Remove path index ->
+            childAt path index root
+                |> Maybe.andThen (\_ -> element path (\r -> { r | children = List.take index r.children ++ List.drop (index + 1) r.children }) root)
+
+
+{-| An index past the end is invalid, rather than quietly clamped.
+-}
+validIndex : Int -> Bool -> Node -> Maybe Node
+validIndex index ok node =
+    if ok && index >= 0 then
+        Just node
+
+    else
+        Nothing
+
+
+childCount : Path -> Node -> Int
+childCount path root =
+    case nodeAt path root of
+        Just (NodeElement r) ->
+            List.length r.children
+
+        _ ->
+            -1
+
+
+childAt : Path -> Int -> Node -> Maybe Node
+childAt path index root =
+    if index < 0 then
+        Nothing
+
+    else
+        case nodeAt path root of
+            Just (NodeElement r) ->
+                List.head (List.drop index r.children)
+
+            _ ->
+                Nothing
+
 
 element :
     Path
@@ -125,3 +184,20 @@ at path f node =
 
                 NodeText _ ->
                     Nothing
+
+
+nodeAt : Path -> Node -> Maybe Node
+nodeAt path node =
+    case ( path, node ) of
+        ( [], _ ) ->
+            Just node
+
+        ( index :: rest, NodeElement r ) ->
+            if index < 0 then
+                Nothing
+
+            else
+                List.head (List.drop index r.children) |> Maybe.andThen (nodeAt rest)
+
+        ( _ :: _, NodeText _ ) ->
+            Nothing

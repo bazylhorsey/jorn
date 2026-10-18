@@ -15,7 +15,7 @@ Statuses: **done** is available today. **partial** is available with a stated di
 | SVG element helpers | todo | |
 | MathML element helpers | todo | |
 | `none`, `fragment` and `advanced` | done | Fragments are spliced into their parent before diffing, so they never appear on the wire. |
-| Keyed children | todo | Needed for efficient reordering of lists. |
+| Keyed children | done | `Jorn.Element.Keyed`. Moves DOM nodes instead of rewriting them, with the fewest moves the order allows. |
 | Memoized subtrees | todo | |
 | Raw HTML | todo | |
 | Render to an HTML string | todo | Needed for server-side rendering. |
@@ -73,4 +73,4 @@ Statuses: **done** is available today. **partial** is available with a stated di
 
 ## Performance
 
-The goal is for Jorn to be as fast as Elm allows. The diff already skips attribute work entirely for elements with no attributes, which is most of them. Keyed children and memoized subtrees are the next big wins.
+The goal is for Jorn to be as fast as Elm allows. The diff already skips attribute work entirely for elements with no attributes, which is most of them, and keyed children turn reorders into a handful of moves. Memoized subtrees are the next big win.

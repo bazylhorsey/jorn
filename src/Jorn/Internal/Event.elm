@@ -91,6 +91,7 @@ find path element =
                         Vdom.flatten children
                             |> List.drop index
                             |> List.head
+                            |> Maybe.map Vdom.unkey
                             |> Maybe.andThen (find rest)
 
                 _ ->

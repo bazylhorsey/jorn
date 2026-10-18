@@ -3,6 +3,7 @@ module EventTest exposing (suite)
 import Expect
 import Jorn.Element as Element exposing (Element)
 import Jorn.Element.Html as Html
+import Jorn.Element.Keyed as Keyed
 import Jorn.Event as Events
 import Jorn.Internal.Event as Event exposing (Error(..))
 import Json.Decode as Decode
@@ -110,6 +111,11 @@ suite =
             \_ ->
                 Event.route (incoming [] "click" noPayload)
                     (Element.fragment [ Element.none, Html.button [ Events.onClick Clicked ] [] ])
+                    |> Expect.equal (Ok Clicked)
+        , test "routes to keyed children by their position on screen" <|
+            \_ ->
+                Event.route (incoming [ 1 ] "click" noPayload)
+                    (Keyed.ul [] [ ( "b", Html.li [] [] ), ( "a", Html.li [ Events.onClick Clicked ] [] ) ])
                     |> Expect.equal (Ok Clicked)
         , test "errors render readably" <|
             \_ ->
