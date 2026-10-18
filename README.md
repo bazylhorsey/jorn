@@ -32,21 +32,23 @@ patches =
 | `Jorn.Patch` | Diff two views and encode the patches as JSON. |
 | [`client/jorn.js`](client/jorn.js) | The browser side: apply patches to the DOM and report events back. No dependencies. |
 
-[examples/counter](examples/counter) runs the full loop two ways: in a browser page, and headless in Node the way a server component would. Either way it mounts a view, takes click and input events, and sends back only what changed:
+[examples/todos](examples/todos) is a complete app, written the way Jorn apps are meant to be. Underneath, the page and the program only exchange JSON: events go in, and only what changed comes back out. A click and a keystroke look like this:
 
 ```
-client -> server {"path":[4],"name":"click","event":{}}
-server -> client {"patches":[{"op":"set-text","path":[3,0],"text":"1"}]}
+page -> app {"path":[4],"name":"click","event":{}}
+app -> page {"patches":[{"op":"set-text","path":[3,0],"text":"1"}]}
 
-client -> server {"path":[1],"name":"input","event":{"target":{"value":"Jorn"}}}
-server -> client {"patches":[{"op":"set-text","path":[0,0],"text":"Hello, Jorn"},{"op":"set-attr","path":[1],"name":"value","value":"Jorn"}]}
+page -> app {"path":[1],"name":"input","event":{"target":{"value":"Jorn"}}}
+app -> page {"patches":[{"op":"set-text","path":[0,0],"text":"Hello, Jorn"},{"op":"set-attr","path":[1],"name":"value","value":"Jorn"}]}
 ```
+
+That's what will let the same program run on a server later, with a websocket in between.
 
 The wire format is specified in [PROTOCOL.md](PROTOCOL.md).
 
 ### Using it
 
-Jorn isn't on the Elm package registry yet. To try it, clone this repo, add its `src` folder to your application's `source-directories` in `elm.json` alongside a dependency on `elm/json`, and load `client/jorn.js` in your page. [examples/counter](examples/counter) shows the wiring.
+Jorn isn't on the Elm package registry yet. To try it, clone this repo, add its `src` folder to your application's `source-directories` in `elm.json` alongside a dependency on `elm/json`, and load `client/jorn.js` in your page. [examples/todos](examples/todos) shows the wiring.
 
 ## The problem, in plain terms
 

@@ -19,6 +19,7 @@
 - `Jorn.Effect` (#17): effects as values. `none`, `batch`, `map`, `fromCmd` for ordinary Elm commands, `focus`, `blur` and `scrollIntoView`, `beforePaint` and `afterPaint`, `event` to dispatch a DOM event from the app's container, and `client` to call a JavaScript function the page registered. The patcher instructions are specified in PROTOCOL.md.
 - `Jorn.simple` and `Jorn.application` run an app in the page (#16): mount, route events, update, diff and patch, with one render per animation frame. Your app declares two ports and `start` from `client/jorn.js` does the rest. `connect` is still there for hosting a program yourself.
 - The patcher no longer reports events the browser fires because of a patch, like the `blur` Chrome sends when a patch removes the focused element. They used to reach the app with a path into the updated view.
+- `examples/todos` replaces `examples/counter` (#18): a complete app on `Jorn.application` showing keyed lists, forms, effects, SVG and ARIA. CI builds it and uses it in jsdom.
 
 ## v0.0 (2026-10-10)
 
