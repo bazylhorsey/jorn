@@ -64,7 +64,7 @@ The client applies `preventDefault` and `stopPropagation` synchronously from the
 
 ## Semantics worth knowing
 
-Within one element, the last attribute, property, or handler with a given name wins, except `class`, which accumulates like it does in `elm/html`.
+Within one element, the last attribute, property, or handler with a given name wins, except `class` and `style`, which accumulate: classes joined with spaces like `elm/html`, and style declarations joined with semicolons. The client only ever sees the joined attribute.
 
 Changing only a handler's message (same event name and options) produces no patch. Decoders stay in Elm and routing always uses the current tree.
 

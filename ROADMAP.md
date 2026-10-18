@@ -25,10 +25,10 @@ Statuses: **done** is available today. **partial** is available with a stated di
 | Feature | Status | Notes |
 |---|---|---|
 | Any attribute (`attribute`) and any property (`property`) | done | |
-| `class` and `classes` | done | Multiple `class` attributes on one element accumulate. |
+| `class` and `classes` | done | Multiple `class` attributes on one element accumulate, and so do `style` attributes. |
 | `id`, `href`, `type_`, `name`, `placeholder`, `for` | done | |
 | `value`, `checked`, `disabled` | done | Encoded so server-rendered HTML and the live DOM agree. |
-| Global attributes (`style`, `title`, `hidden`, `tabindex`, `lang`, `data-*`, ...) | todo | All work today through `attribute`. |
+| Global attributes (`style`, `title`, `hidden`, `tabindex`, `lang`, `data-*`, ...) | done | `style` declarations accumulate into one attribute, like `class`. `Attribute.none` for conditionals. |
 | Form, media, link, and table attributes | todo | |
 | ARIA attributes and `role` | todo | |
 

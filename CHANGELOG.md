@@ -12,6 +12,7 @@
 - `Jorn.Element.Keyed`: children matched by key instead of position (#10). Reordering, inserting or removing items moves the existing DOM nodes, so focus and typed input stay with the right item. Three new patch ops, `insert`, `move` and `remove`, documented in PROTOCOL.md. Unkeyed views produce exactly the same patches as before.
 - `Jorn.Element.Html` has a function for every standard HTML element (#3), 114 in all. Void elements take only attributes, so `Html.input [ ... ] []` is now `Html.input [ ... ]`. `Html.svg` and `Html.math` start their own namespaces.
 - `Jorn.Element.Svg` has a function for every SVG element, in the SVG namespace (#13).
+- Global attributes in `Jorn.Attribute` (#4): `none`, `style`, `styles`, `title`, `lang`, `dir`, `data`, `tabindex`, `hidden`, `inert`, and the editing, popover, command and microdata attributes. Several `style` attributes on one element now accumulate into one, the way `class` does, including ones set with `attribute "style"`.
 
 ## v0.0 (2026-10-10)
 

@@ -295,6 +295,8 @@ attribute : Generator (Vdom.Attribute ())
 attribute =
     Random.uniform (Random.map Attr.class (Random.uniform "" [ "x", "y" ]))
         [ Random.map (Attr.attribute "title") (Random.uniform "" [ "x", "y" ])
+        , Random.constant Attr.none
+        , Random.map2 Attr.style (Random.uniform "color" [ "top" ]) (Random.uniform "red" [ "0" ])
         , Random.map Attr.value (Random.uniform "" [ "v", "w" ])
         , Random.map Attr.checked (Random.uniform True [ False ])
         , Random.map Attr.disabled (Random.uniform True [ False ])
@@ -352,6 +354,9 @@ attrName attr =
 
         Vdom.Options _ wrapped ->
             attrName wrapped
+
+        Vdom.NoAttribute ->
+            ""
 
 
 
@@ -432,6 +437,9 @@ relabel id attr =
 
         Vdom.Options options wrapped ->
             Vdom.Options options (relabel id wrapped)
+
+        Vdom.NoAttribute ->
+            Vdom.NoAttribute
 
 
 
