@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- The patcher ignores property names and event fields that lead to a prototype (`__proto__`, `constructor`, `prototype`). Setting `__proto__` on an element used to replace its prototype and break the page. A path step that isn't a child index is now a protocol error.
+- CI runs with a read-only token.
+
 ## v0.1 (2026-10-18)
 
 Client apps: the full HTML and SVG vocabulary, attributes and ARIA, keyed lists, fragments, effects, and an app runtime.

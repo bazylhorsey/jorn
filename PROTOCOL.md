@@ -24,7 +24,7 @@ A view's root is always a single node. A fragment at the root becomes an empty t
   "children": [] }
 ```
 
-`namespace` is `""` for HTML. `attrs` are strings set with `setAttribute`. `props` are JSON values assigned to the DOM object. `events` tell the client which listeners to install and how; the handlers themselves never leave Elm.
+`namespace` is `""` for HTML. `attrs` are strings set with `setAttribute`. `props` are JSON values assigned to the DOM object; the client ignores the names `__proto__`, `constructor` and `prototype`, so a property can't change what kind of object an element is. `events` tell the client which listeners to install and how; the handlers themselves never leave Elm.
 
 ## Patches
 
@@ -74,7 +74,7 @@ An `id` that matches nothing, or a `client` name nobody registered, is reported 
 { "path": [1, 0], "name": "input", "event": { "target": { "value": "hi" } } }
 ```
 
-The client applies `preventDefault` and `stopPropagation` synchronously from the listener's options, then builds `event` from the dotted paths in `include`. When Elm runs in the same page (client mode), the client can pass the live event object instead, and `include` doesn't matter. Events the browser fires as a result of applying patches, like the `blur` some browsers send when a patch removes the focused element, are not reported. In client mode, `Jorn.application` routes each event to the handler that produced it. Routing for hosts that do it themselves, like a server, lives in `Jorn.Internal.Event` for now and becomes public with the server runtime.
+The client applies `preventDefault` and `stopPropagation` synchronously from the listener's options, then builds `event` from the dotted paths in `include`, skipping any path that goes through `__proto__`, `constructor` or `prototype`. When Elm runs in the same page (client mode), the client can pass the live event object instead, and `include` doesn't matter. Events the browser fires as a result of applying patches, like the `blur` some browsers send when a patch removes the focused element, are not reported. In client mode, `Jorn.application` routes each event to the handler that produced it. Routing for hosts that do it themselves, like a server, lives in `Jorn.Internal.Event` for now and becomes public with the server runtime.
 
 ## Client mode runtime
 

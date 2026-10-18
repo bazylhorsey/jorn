@@ -115,6 +115,7 @@ export function connect(container, { send, raw = false, effects = {} } = {}) {
   }
 
   function setProperty(el, name, value) {
+    if (isPrototypeKey(name)) return;
     if (isLive(el, name)) writeLive(el, name, value);
     else el[name] = value;
   }
@@ -122,6 +123,7 @@ export function connect(container, { send, raw = false, effects = {} } = {}) {
   // A removed property goes back to what a fresh element would have, unless
   // an attribute of the same name now says otherwise.
   function resetProperty(el, name) {
+    if (isPrototypeKey(name)) return;
     const fresh = el.localName.includes("-") ? null : defaultsFor(el);
     if (fresh && name in fresh) {
       const value = el.hasAttribute(name)
@@ -192,8 +194,9 @@ export function connect(container, { send, raw = false, effects = {} } = {}) {
 
   function resolve(path) {
     let node = container.firstChild;
+    // `item` rather than indexing, so a step can only ever reach a child.
     for (const index of path) {
-      node = node && node.nodeType === 1 ? node.childNodes[index] : undefined;
+      node = node && node.nodeType === 1 && Number.isInteger(index) ? node.childNodes.item(index) : undefined;
     }
     if (!node) throw new Error(`Jorn: no node at path [${path}]`);
     return node;
@@ -206,7 +209,7 @@ export function connect(container, { send, raw = false, effects = {} } = {}) {
   }
 
   function childAt(el, index, path) {
-    const child = el.childNodes[index];
+    const child = Number.isInteger(index) ? el.childNodes.item(index) : null;
     if (!child) throw new Error(`Jorn: no child ${index} at path [${path}]`);
     return child;
   }
@@ -441,6 +444,7 @@ function pick(event, include) {
   const out = {};
   for (const dotted of include) {
     const keys = dotted.split(".");
+    if (keys.some(isPrototypeKey)) continue;
     let value = event;
     for (const key of keys) {
       value = value == null ? undefined : value[key];
@@ -455,6 +459,12 @@ function pick(event, include) {
     target[keys[keys.length - 1]] = toJson(value);
   }
   return out;
+}
+
+// Property names and event fields come off the wire. These would lead to an
+// object's prototype instead of one of its own fields, so they're ignored.
+function isPrototypeKey(key) {
+  return key === "__proto__" || key === "constructor" || key === "prototype";
 }
 
 function toJson(value) {
