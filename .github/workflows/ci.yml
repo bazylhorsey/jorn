@@ -12,11 +12,6 @@ jobs:
       - run: npx elm-format --validate src tests examples client/test/elm/src
       - run: npx elm make --docs=docs.json
       - run: npx elm-test --fuzz 1000
-      - name: Counter example, headless
-        working-directory: examples/counter
-        run: |
-          $GITHUB_WORKSPACE/node_modules/.bin/elm make src/Main.elm --output=build/main.js
-          node run.mjs
 
   client:
     runs-on: ubuntu-latest
@@ -32,6 +27,16 @@ jobs:
         working-directory: client/test
       - name: Browser patcher, unit and randomized tests
         run: node run.mjs 5000
+        working-directory: client/test
+      - run: $GITHUB_WORKSPACE/node_modules/.bin/elm make src/RuntimeSpec.elm --output=build/runtime.js
+        working-directory: client/test/elm
+      - name: App runtime
+        run: node runtime.mjs
+        working-directory: client/test
+      - run: $GITHUB_WORKSPACE/node_modules/.bin/elm make src/Main.elm --output=build/main.js
+        working-directory: examples/todos
+      - name: Todos example
+        run: node example.mjs
         working-directory: client/test
 
   elm-0-19-2:

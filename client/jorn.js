@@ -16,6 +16,9 @@
 //   });
 //   jorn.mount(tree);      // once
 //   jorn.patch(patches);   // after every update, in order
+//
+// For an app built with Jorn.simple or Jorn.application running in the page,
+// `start` does all of that for you.
 
 const LIVE = {
   value: new Set(["input", "textarea", "select"]),
@@ -30,9 +33,11 @@ const XHTML = "http://www.w3.org/1999/xhtml";
  * contents belong to Jorn from here on: its only child is the root node.
  *
  * @param {Element} container
- * @param {{ send: (event: { path: number[], name: string, event: unknown }) => void, raw?: boolean }} options
+ * `effects` holds the functions Elm can call by name with `Effect.client`.
+ *
+ * @param {{ send: (event: { path: number[], name: string, event: unknown }) => void, raw?: boolean, effects?: Record<string, (payload: unknown, context: { container: Element }) => void> }} options
  */
-export function connect(container, { send, raw = false } = {}) {
+export function connect(container, { send, raw = false, effects = {} } = {}) {
   if (!container || container.nodeType !== 1) {
     throw new TypeError("Jorn: connect needs a container element");
   }
@@ -45,6 +50,7 @@ export function connect(container, { send, raw = false } = {}) {
   const pristine = new Map(); // "namespace tag" -> untouched element, for property defaults
   const reported = new WeakMap(); // element -> { value: [...], checked: [...] } the user sent, not yet echoed
   let echoed = new Map(); // element -> { name: value } echoes skipped in the current batch
+  let changing = false; // true while mount, patch or unmount is changing the DOM
 
   // ---- Building nodes ------------------------------------------------------
 
@@ -159,6 +165,10 @@ export function connect(container, { send, raw = false } = {}) {
     // Decided here and now: a server can't answer in time.
     if (options.preventDefault) event.preventDefault();
     if (options.stopPropagation) event.stopPropagation();
+    // Events the page fires because of our own DOM changes, like the blur
+    // Chrome sends when a patch removes the focused element, aren't the
+    // user's doing. Mid-patch, their path points into a half-updated tree.
+    if (changing) return;
     const path = pathOf(el);
     if (!path) return;
     remember(el);
@@ -278,17 +288,68 @@ export function connect(container, { send, raw = false } = {}) {
     }
   }
 
+  // ---- Instructions --------------------------------------------------------
+
+  function byId(id) {
+    const root = container.getRootNode();
+    const found = typeof root.getElementById === "function" ? root.getElementById(id) : doc.getElementById(id);
+    if (!found) console.warn(`Jorn: no element with id ${JSON.stringify(id)}`);
+    return found;
+  }
+
+  function runInstruction(instruction) {
+    switch (instruction.effect) {
+      case "focus":
+        byId(instruction.id)?.focus();
+        break;
+      case "blur":
+        byId(instruction.id)?.blur();
+        break;
+      case "scroll-into-view":
+        byId(instruction.id)?.scrollIntoView?.();
+        break;
+      case "event": {
+        const CustomEvent = doc.defaultView.CustomEvent;
+        container.dispatchEvent(new CustomEvent(instruction.name, { detail: instruction.detail, bubbles: true, composed: true }));
+        break;
+      }
+      case "client": {
+        const effect = Object.hasOwn(effects, instruction.name) ? effects[instruction.name] : undefined;
+        if (typeof effect === "function") effect(instruction.payload, { container });
+        else console.warn(`Jorn: no client effect called ${JSON.stringify(instruction.name)}`);
+        break;
+      }
+      default:
+        throw new Error(`Jorn: unknown effect ${JSON.stringify(instruction.effect)}`);
+    }
+  }
+
   return {
     /** Render a whole tree, replacing whatever the container held. */
     mount(node) {
-      container.replaceChildren(create(node));
+      changing = true;
+      try {
+        container.replaceChildren(create(node));
+      } finally {
+        changing = false;
+      }
     },
 
     /** Apply a list of patches, strictly in order. */
     patch(patches) {
       echoed = new Map();
-      for (const patch of patches) applyPatch(patch);
-      echoed = new Map();
+      changing = true;
+      try {
+        for (const patch of patches) applyPatch(patch);
+      } finally {
+        changing = false;
+        echoed = new Map();
+      }
+    },
+
+    /** Run patcher instructions from Jorn.Effect, in order, after patching. */
+    run(instructions) {
+      for (const instruction of instructions) runInstruction(instruction);
     },
 
     /** The DOM node at a path, or `null`. Handy in tests. */
@@ -302,7 +363,74 @@ export function connect(container, { send, raw = false } = {}) {
 
     /** Empty the container and stop reporting its events. */
     unmount() {
-      container.replaceChildren();
+      changing = true;
+      try {
+        container.replaceChildren();
+      } finally {
+        changing = false;
+      }
+    },
+  };
+}
+
+/**
+ * Start a compiled Jorn program (`Jorn.simple` or `Jorn.application`) in
+ * `container`, in client mode: the program runs in this page.
+ *
+ *   import { start } from "./jorn.js";
+ *
+ *   const app = start(Elm.Main, document.getElementById("app"), {
+ *     flags,                                   // whatever your init expects
+ *     effects: { copy: (text) => ... },        // for Effect.client
+ *   });
+ *   app.shutdown();                            // stop and empty the container
+ *
+ * The program has to declare ports called `toJorn` and `fromJorn`. If yours
+ * are named differently, pass `ports: { toJorn: "...", fromJorn: "..." }`.
+ *
+ * @param {{ init: (options: { flags?: unknown }) => { ports: Record<string, any> } }} program
+ * @param {Element} container
+ * @param {{ flags?: unknown, effects?: Record<string, Function>, ports?: { toJorn?: string, fromJorn?: string } }} options
+ */
+export function start(program, container, { flags, effects = {}, ports = {} } = {}) {
+  const { toJorn = "toJorn", fromJorn = "fromJorn" } = ports;
+  const app = program.init(flags === undefined ? {} : { flags });
+  const out = app.ports?.[toJorn];
+  const into = app.ports?.[fromJorn];
+  if (!out?.subscribe || !into?.send) {
+    throw new TypeError(`Jorn: start needs a program with ports called ${toJorn} and ${fromJorn}`);
+  }
+
+  const jorn = connect(container, { send: (event) => into.send({ event }), raw: true, effects });
+  const view = container.ownerDocument.defaultView;
+  // One render per animation frame, however many messages arrive before it.
+  const nextFrame =
+    typeof view?.requestAnimationFrame === "function"
+      ? (callback) => view.requestAnimationFrame(callback)
+      : (callback) => setTimeout(callback, 0);
+  let running = true;
+
+  function receive(message) {
+    if (!running) return;
+    if (message.mount) jorn.mount(message.mount);
+    if (message.patches) {
+      jorn.patch(message.patches);
+      jorn.run(message.instructions ?? []);
+      if (message.painted) into.send({ painted: true });
+    }
+    if (message.frame) nextFrame(() => running && into.send({ frame: true }));
+    if (message.error) console.warn(`Jorn: ${message.error}`);
+  }
+  out.subscribe(receive);
+
+  return {
+    /** Stop the program and empty the container. */
+    shutdown() {
+      if (!running) return;
+      running = false;
+      out.unsubscribe(receive);
+      into.send({ shutdown: true });
+      jorn.unmount();
     },
   };
 }

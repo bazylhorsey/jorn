@@ -4,48 +4,78 @@
 
 Jorn is an attempt to build the web framework that doesn't make you choose. Today every serious option wins on one axis by giving up another. Jorn's bet is that with the right language, you can have all of them at once.
 
-> **Status: v0.0.** The foundation is built and tested: a pure Elm virtual DOM, a diff, a JSON wire protocol, event routing, and the small browser script that applies patches to the page. The rest of this page describes where it's going. See the [roadmap](ROADMAP.md).
+> **Status: v0.1.** You can build browser apps with Jorn: every HTML and SVG element, attributes and ARIA, keyed lists, fragments, effects, and an app runtime, on a pure Elm virtual DOM with a tested wire protocol and patcher. Server components are next. The rest of this page describes where it's going. See the [roadmap](ROADMAP.md).
 
-## What v0.0 gives you
+## What v0.1 gives you
 
-A virtual DOM that is ordinary Elm data, so a `view` can be diffed anywhere: in the browser, in a Node process, or on a server streaming patches to a browser.
+Browser apps in the Elm Architecture, on a virtual DOM that is ordinary Elm data, so a `view` can be diffed anywhere: in the browser today, and on a server streaming patches to a browser next.
 
 ```elm
+port module Main exposing (main)
+
+import Jorn
 import Jorn.Element as Element exposing (Element)
 import Jorn.Element.Html as Html
 import Jorn.Event exposing (onClick)
-import Jorn.Patch
+import Json.Encode exposing (Value)
+
+port toJorn : Value -> Cmd msg
+
+port fromJorn : (Value -> msg) -> Sub msg
+
+main : Jorn.Program () Int Msg
+main =
+    Jorn.simple
+        { init = 0
+        , update = update
+        , view = view
+        , ports = { toJorn = toJorn, fromJorn = fromJorn }
+        }
+
+type Msg
+    = Increment
+
+update : Msg -> Int -> Int
+update Increment count =
+    count + 1
 
 view : Int -> Element Msg
 view count =
     Html.button [ onClick Increment ] [ Element.text (String.fromInt count) ]
-
-patches =
-    Jorn.Patch.diff (view 1) (view 2)
--- one patch: set the button's text to "2"
 ```
+
+```js
+import { start } from "./jorn.js";
+
+start(Elm.Main, document.getElementById("app"));
+```
+
+Each click runs `update`, diffs the new view against the old one in Elm, and sends the page one patch: set the button's text.
 
 | Module | What it does |
 |---|---|
 | `Jorn.Element`, `Jorn.Element.Html`, `Jorn.Attribute`, `Jorn.Event` | Build views. Ordinary Elm data, like `elm/html`. |
+| `Jorn`, `Jorn.Effect` | Run an app in the page: `init`, `update`, `view`, and effects. |
 | `Jorn.Patch` | Diff two views and encode the patches as JSON. |
 | [`client/jorn.js`](client/jorn.js) | The browser side: apply patches to the DOM and report events back. No dependencies. |
 
-[examples/counter](examples/counter) runs the full loop two ways: in a browser page, and headless in Node the way a server component would. Either way it mounts a view, takes click and input events, and sends back only what changed:
+[examples/todos](examples/todos) is a complete app, written the way Jorn apps are meant to be. Underneath, the page and the program only exchange JSON: events go in, and only what changed comes back out. A click and a keystroke look like this:
 
 ```
-client -> server {"path":[4],"name":"click","event":{}}
-server -> client {"patches":[{"op":"set-text","path":[3,0],"text":"1"}]}
+page -> app {"path":[4],"name":"click","event":{}}
+app -> page {"patches":[{"op":"set-text","path":[3,0],"text":"1"}]}
 
-client -> server {"path":[1],"name":"input","event":{"target":{"value":"Jorn"}}}
-server -> client {"patches":[{"op":"set-text","path":[0,0],"text":"Hello, Jorn"},{"op":"set-attr","path":[1],"name":"value","value":"Jorn"}]}
+page -> app {"path":[1],"name":"input","event":{"target":{"value":"Jorn"}}}
+app -> page {"patches":[{"op":"set-text","path":[0,0],"text":"Hello, Jorn"},{"op":"set-attr","path":[1],"name":"value","value":"Jorn"}]}
 ```
+
+That's what will let the same program run on a server later, with a websocket in between.
 
 The wire format is specified in [PROTOCOL.md](PROTOCOL.md).
 
 ### Using it
 
-Jorn isn't on the Elm package registry yet. To try it, clone this repo, add its `src` folder to your application's `source-directories` in `elm.json` alongside a dependency on `elm/json`, and load `client/jorn.js` in your page. [examples/counter](examples/counter) shows the wiring.
+Jorn isn't on the Elm package registry yet. To try it, clone this repo, add its `src` folder to your application's `source-directories` in `elm.json` alongside a dependency on `elm/json`, and load `client/jorn.js` in your page. [examples/todos](examples/todos) shows the wiring.
 
 ## The problem, in plain terms
 
@@ -91,7 +121,7 @@ Jorn is built to work with that direction, not around it. It needs nothing beyon
 
 **It's not a fork.** Jorn's Elm code is ordinary packages with no kernel code, playing by the package registry's rules. The pieces that can't be pure Elm (the browser patcher, the server runtime) live outside the Elm package graph, the same way elm-pages, elm-review, and Lamdera's tooling do. Elm's guarantees stay intact.
 
-**It's not a replacement for `elm/html`.** If you're building a normal browser app, `elm/html` is great. Jorn has its own `Html` type because `elm/html` values are opaque and can only be rendered by the browser runtime. Jorn's are ordinary data, so they can be compared and diffed anywhere, including on a server.
+**It's not a replacement for `elm/html`.** If you're building a normal browser app, `elm/html` is great. Jorn has its own `Element` type because `elm/html` values are opaque and can only be rendered by the browser runtime. Jorn's are ordinary data, so they can be compared and diffed anywhere, including on a server.
 
 **It's not a new architecture.** It's The Elm Architecture (`init`, `update`, `view`), extended so `view` can run somewhere other than the browser.
 
@@ -119,8 +149,8 @@ On the server, a small JavaScript runtime runs each connected user's session as 
 |---|---|---|
 | 1 | Pure Elm virtual DOM, diff, wire protocol, event routing | **Done** |
 | 2 | Browser patcher: apply patches to the real DOM, report events back | **Done** |
-| 3 | Full HTML, SVG, and MathML coverage, keyed lists, effects, and an app runtime | Next |
-| 4 | Server runtime (JavaScript: Node, Bun, or Deno) running a component over a websocket | Planned |
+| 3 | Full HTML and SVG coverage, keyed lists, effects, and an app runtime | **Done** (v0.1). MathML helpers come later. |
+| 4 | Server runtime (JavaScript: Node, Bun, or Deno) running a component over a websocket | Next |
 | 5 | Generated, compiler-checked encoders for shared types | Planned |
 | 6 | Session snapshots and typed migrations: deploy mid-session, nobody notices | Planned |
 | 7 | Server-side rendering, hydration, components as custom elements, test utilities | Planned |

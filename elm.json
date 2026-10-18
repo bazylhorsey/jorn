@@ -5,11 +5,13 @@
     "license": "BSD-3-Clause",
     "version": "1.0.0",
     "exposed-modules": [
+        "Jorn",
         "Jorn.Attribute",
         "Jorn.Element",
         "Jorn.Element.Html",
         "Jorn.Element.Keyed",
         "Jorn.Element.Svg",
+        "Jorn.Effect",
         "Jorn.Event",
         "Jorn.Patch"
     ],

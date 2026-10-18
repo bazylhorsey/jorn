@@ -1,7 +1,7 @@
 // A tiny static server for the examples. Serves the repository root, so a
 // page can load ../../client/jorn.js.
 //
-//   node examples/serve.mjs        then open http://localhost:8000/examples/counter/
+//   node examples/serve.mjs        then open http://localhost:8000/examples/todos/
 
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
@@ -29,5 +29,5 @@ createServer(async (request, response) => {
     response.writeHead(404).end("Not found");
   }
 }).listen(port, () => {
-  console.log(`Serving ${root} at http://localhost:${port}/examples/counter/`);
+  console.log(`Serving ${root} at http://localhost:${port}/examples/todos/`);
 });

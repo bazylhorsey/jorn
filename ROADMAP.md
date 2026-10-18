@@ -30,7 +30,7 @@ Statuses: **done** is available today. **partial** is available with a stated di
 | `value`, `checked`, `disabled` | done | Encoded so server-rendered HTML and the live DOM agree. |
 | Global attributes (`style`, `title`, `hidden`, `tabindex`, `lang`, `data-*`, ...) | done | `style` declarations accumulate into one attribute, like `class`. `Attribute.none` for conditionals. |
 | Form, media, link, and table attributes | done | Plus `defaultValue`, `defaultChecked` and `defaultSelected` for controls you don't keep in step with your model. |
-| ARIA attributes and `role` | todo | |
+| ARIA attributes and `role` | done | One function per ARIA attribute, all taking a `String`, plus `aria` for any other. |
 
 ## Events
 
@@ -39,7 +39,7 @@ Statuses: **done** is available today. **partial** is available with a stated di
 | `on` and `custom` | done | Options are static, so the client can decide `preventDefault` instantly without a round trip. |
 | `onClick`, `onInput`, `onCheck`, `onSubmit` | done | |
 | `preventDefault` and `stopPropagation` | done | Static, through `custom`. Deciding per event is todo. |
-| Mouse, keyboard, focus, blur, and change helpers | todo | All work today through `on`. |
+| Mouse, keyboard, focus, blur, and change helpers | done | Keyboard helpers include `key`, so server components get it. |
 | Debounce and throttle | todo | |
 | Emitting custom events from a component | todo | |
 
@@ -49,14 +49,14 @@ Statuses: **done** is available today. **partial** is available with a stated di
 |---|---|---|
 | Mount (encode a whole tree) | done | `Jorn.Patch.encodeHtml` |
 | Diff and patch encoding | done | `Jorn.Patch`, specified in [PROTOCOL.md](PROTOCOL.md) |
-| Event decoding and routing | done | `Jorn.Internal.Event`, public once the runtime lands |
+| Event decoding and routing | done | Built into the runtime. Public with the server runtime, for hosts that route events themselves. |
 
 ## Runtime
 
 | Feature | Status | Notes |
 |---|---|---|
-| App runtime (`init`, `update`, `view` programs) | todo | |
-| Effects (`Effect.none`, `batch`, `map`, ...) | todo | |
+| App runtime (`init`, `update`, `view` programs) | done | `Jorn.simple` and `Jorn.application`, started in the page with `start` from `client/jorn.js`. One diff per animation frame, however many messages arrive. |
+| Effects (`Effect.none`, `batch`, `map`, ...) | done | `Jorn.Effect`: Elm commands, focus and scrolling, paint timing, custom events and named client effects. Contexts come with #28. |
 | Browser patcher (small JavaScript) | done | [client/jorn.js](client/jorn.js). Checked against [tests/Reference.elm](tests/Reference.elm)'s semantics with randomized diffs in `client/test/`. |
 | Server runtime over a websocket (Node, Bun, Deno) | todo | |
 | Components as custom elements (attributes, properties, slots, form association) | todo | |

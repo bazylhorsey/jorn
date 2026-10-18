@@ -1,8 +1,11 @@
 module Jorn.Event exposing
     ( on, custom, Options
     , onClick, onInput, onCheck, onSubmit
+    , onMouseDown, onMouseUp, onMouseEnter, onMouseLeave, onMouseOver, onMouseOut
+    , onKeydown, onKeyup, onKeypress
+    , onChange, onFocus, onBlur
     , preventDefault, stopPropagation, include
-    , targetValue, targetChecked
+    , targetValue, targetChecked, key
     )
 
 {-| Event handlers.
@@ -33,6 +36,24 @@ option only reaches the handler it wraps.
 @docs onClick, onInput, onCheck, onSubmit
 
 
+# Mouse
+
+@docs onMouseDown, onMouseUp, onMouseEnter, onMouseLeave, onMouseOver, onMouseOut
+
+
+# Keyboard
+
+Keyboard handlers get the event's `key`, like `"Enter"`, `"a"` or
+`"ArrowUp"`, and include it, so a server component receives it too.
+
+@docs onKeydown, onKeyup, onKeypress
+
+
+# Forms and focus
+
+@docs onChange, onFocus, onBlur
+
+
 # Options
 
 @docs preventDefault, stopPropagation, include
@@ -40,7 +61,7 @@ option only reaches the handler it wraps.
 
 # Decoders
 
-@docs targetValue, targetChecked
+@docs targetValue, targetChecked, key
 
 -}
 
@@ -96,6 +117,95 @@ onSubmit msg =
     custom "submit" preventDefault (Decode.succeed msg)
 
 
+{-| -}
+onMouseDown : msg -> Attribute msg
+onMouseDown msg =
+    on "mousedown" (Decode.succeed msg)
+
+
+{-| -}
+onMouseUp : msg -> Attribute msg
+onMouseUp msg =
+    on "mouseup" (Decode.succeed msg)
+
+
+{-| Fires when the pointer moves onto the element. Unlike `onMouseOver`, it
+doesn't fire again for the element's children.
+-}
+onMouseEnter : msg -> Attribute msg
+onMouseEnter msg =
+    on "mouseenter" (Decode.succeed msg)
+
+
+{-| Fires when the pointer leaves the element. Unlike `onMouseOut`, it doesn't
+fire for the element's children.
+-}
+onMouseLeave : msg -> Attribute msg
+onMouseLeave msg =
+    on "mouseleave" (Decode.succeed msg)
+
+
+{-| -}
+onMouseOver : msg -> Attribute msg
+onMouseOver msg =
+    on "mouseover" (Decode.succeed msg)
+
+
+{-| -}
+onMouseOut : msg -> Attribute msg
+onMouseOut msg =
+    on "mouseout" (Decode.succeed msg)
+
+
+{-| Includes `key`.
+
+    Html.input [ Event.onKeydown KeyPressed ]
+
+-}
+onKeydown : (String -> msg) -> Attribute msg
+onKeydown =
+    keyHandler "keydown"
+
+
+{-| Includes `key`.
+-}
+onKeyup : (String -> msg) -> Attribute msg
+onKeyup =
+    keyHandler "keyup"
+
+
+{-| Includes `key`. Browsers have deprecated `keypress`; prefer `onKeydown`.
+-}
+onKeypress : (String -> msg) -> Attribute msg
+onKeypress =
+    keyHandler "keypress"
+
+
+keyHandler : String -> (String -> msg) -> Attribute msg
+keyHandler name tagger =
+    custom name (include [ "key" ]) (Decode.map tagger key)
+
+
+{-| Fires when a control's value is committed, for example when a text field
+loses focus or a `select` changes. Includes `target.value`.
+-}
+onChange : (String -> msg) -> Attribute msg
+onChange tagger =
+    custom "change" (include [ "target.value" ]) (Decode.map tagger targetValue)
+
+
+{-| -}
+onFocus : msg -> Attribute msg
+onFocus msg =
+    on "focus" (Decode.succeed msg)
+
+
+{-| -}
+onBlur : msg -> Attribute msg
+onBlur msg =
+    on "blur" (Decode.succeed msg)
+
+
 {-| Call `preventDefault` on the event before it reaches Elm.
 -}
 preventDefault : Options msg
@@ -130,3 +240,10 @@ targetValue =
 targetChecked : Decoder Bool
 targetChecked =
     Decode.at [ "target", "checked" ] Decode.bool
+
+
+{-| The `key` of a keyboard event, like `"Enter"`, `"a"` or `"ArrowUp"`.
+-}
+key : Decoder String
+key =
+    Decode.field "key" Decode.string

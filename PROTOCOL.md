@@ -54,13 +54,51 @@ A patch message is a JSON array of patches. **Apply them strictly in order.** Th
 
 **Resetting a property.** If the element's tag has the property natively, it goes back to its value on a freshly created element of that tag, unless an attribute of the same name is present, in which case it follows the attribute (`true` for boolean properties). Any other property is deleted.
 
+## Patcher instructions
+
+Effects that have to touch the DOM travel as instructions, applied in order right after the patches they arrive with, so they can refer to elements those patches created. Elements are found by `id`, within the root node of the container (its document or shadow root).
+
+| `effect` | Fields | Client behavior |
+|---|---|---|
+| `focus` | `id` | `focus()` the element |
+| `blur` | `id` | `blur()` the element |
+| `scroll-into-view` | `id` | `scrollIntoView()` the element |
+| `event` | `name`, `detail` | Dispatch a `CustomEvent` from the container that bubbles and is composed |
+| `client` | `name`, `payload` | Call the function the page registered under `name`, with `payload` |
+
+An `id` that matches nothing, or a `client` name nobody registered, is reported with a console warning and skipped.
+
 ## Events, client to Elm
 
 ```json
 { "path": [1, 0], "name": "input", "event": { "target": { "value": "hi" } } }
 ```
 
-The client applies `preventDefault` and `stopPropagation` synchronously from the listener's options, then builds `event` from the dotted paths in `include`. When Elm runs in the same page (client mode), the client can pass the live event object instead, and `include` doesn't matter. Routing an incoming event to the handler that produced it lives in `Jorn.Internal.Event` for now, and becomes public with the runtime.
+The client applies `preventDefault` and `stopPropagation` synchronously from the listener's options, then builds `event` from the dotted paths in `include`. When Elm runs in the same page (client mode), the client can pass the live event object instead, and `include` doesn't matter. Events the browser fires as a result of applying patches, like the `blur` some browsers send when a patch removes the focused element, are not reported. In client mode, `Jorn.application` routes each event to the handler that produced it. Routing for hosts that do it themselves, like a server, lives in `Jorn.Internal.Event` for now and becomes public with the server runtime.
+
+## Client mode runtime
+
+A `Jorn.simple` or `Jorn.application` program running in the page talks to `start` in `client/jorn.js` through its two ports. Apps never see these messages. They're listed here for anyone hosting a program some other way.
+
+Program to page, on `toJorn`:
+
+| Message | Page behavior |
+|---|---|
+| `{ "mount": node }` | Render the first view |
+| `{ "frame": true }` | Send `{ "frame": true }` back on the next animation frame |
+| `{ "patches": [...], "instructions": [...], "painted": bool }` | Apply the patches, then run the instructions. If `painted` is `true`, send `{ "painted": true }` back once both are done |
+| `{ "error": "..." }` | Log it. The program got an event or message it couldn't read |
+
+Page to program, on `fromJorn`:
+
+| Message | Program behavior |
+|---|---|
+| `{ "event": { "path", "name", "event" } }` | Route the event to its handler and run `update` |
+| `{ "frame": true }` | Run `beforePaint` messages, diff once, and send the patches and instructions |
+| `{ "painted": true }` | Run `afterPaint` messages |
+| `{ "shutdown": true }` | Stop, and ignore everything after |
+
+The program asks for a frame only when something changed, and every message that arrives before the frame is handled before its one diff, so a burst of events costs one render.
 
 ## Semantics worth knowing
 

@@ -117,6 +117,16 @@ suite =
                 Event.route (incoming [ 1 ] "click" noPayload)
                     (Keyed.ul [] [ ( "b", Html.li [] [] ), ( "a", Html.li [ Events.onClick Clicked ] [] ) ])
                     |> Expect.equal (Ok Clicked)
+        , test "keyboard handlers decode the key" <|
+            \_ ->
+                Event.route (incoming [] "keydown" (Encode.object [ ( "key", Encode.string "Enter" ) ]))
+                    (Html.input [ Events.onKeydown Typed ])
+                    |> Expect.equal (Ok (Typed "Enter"))
+        , test "onChange decodes the committed value" <|
+            \_ ->
+                Event.route (incoming [] "change" (Encode.object [ ( "target", Encode.object [ ( "value", Encode.string "b" ) ] ) ]))
+                    (Html.select [ Events.onChange Typed ] [])
+                    |> Expect.equal (Ok (Typed "b"))
         , test "errors render readably" <|
             \_ ->
                 Event.errorToString (NoHandler [ 1, 1 ] "input")

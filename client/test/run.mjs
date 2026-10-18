@@ -281,6 +281,55 @@ unit("selected follows the model, defaultSelected only starts it", () => {
   check(second.value === "a" && !second.options[1].hasAttribute("selected"), "the user's choice stays", { got: second.value });
 });
 
+unit("keyboard events send their key in server mode", () => {
+  const { container, sent, jorn } = setup();
+  jorn.mount(el("input", { events: { keydown: opts({ include: ["key"] }) } }));
+  container.firstChild.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter" }));
+  check(JSON.stringify(sent[0]?.event) === '{"key":"Enter"}', "key is sent", { sent });
+});
+
+unit("patcher instructions run against the page", () => {
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+  const copied = [];
+  const jorn = connect(container, { send: () => {}, effects: { copy: (payload, context) => copied.push([payload, context.container]) } });
+  jorn.mount(el("div", {}, [el("input", { attrs: { id: "first" } }), el("input", { attrs: { id: "second" } })]));
+  const [first, second] = container.firstChild.childNodes;
+  let scrolled = null;
+  second.scrollIntoView = () => (scrolled = second);
+  const heard = [];
+  document.body.addEventListener("saved", (event) => heard.push(event.detail));
+  const warn = console.warn;
+  const warnings = [];
+  console.warn = (message) => warnings.push(message);
+  try {
+    jorn.run([
+      { effect: "focus", id: "first" },
+      { effect: "scroll-into-view", id: "second" },
+      { effect: "event", name: "saved", detail: { id: 7 } },
+      { effect: "client", name: "copy", payload: "link" },
+      { effect: "focus", id: "missing" },
+      { effect: "client", name: "toString", payload: null },
+    ]);
+  } finally {
+    console.warn = warn;
+  }
+  check(document.activeElement === first, "focus");
+  check(scrolled === second, "scroll into view");
+  check(heard.length === 1 && heard[0].id === 7, "custom event bubbles out of the container", { heard });
+  check(copied.length === 1 && copied[0][0] === "link" && copied[0][1] === container, "client effect gets its payload");
+  check(warnings.length === 2, "missing ids and unregistered effects warn", { warnings });
+  jorn.run([{ effect: "blur", id: "first" }]);
+  check(document.activeElement !== first, "blur");
+  let threw = false;
+  try {
+    jorn.run([{ effect: "explode" }]);
+  } catch {
+    threw = true;
+  }
+  check(threw, "unknown instruction throws");
+});
+
 unit("detached elements stay quiet", () => {
   const { container, sent, jorn } = setup();
   jorn.mount(el("div", {}, [el("button", { events: { click: opts() } })]));
@@ -288,6 +337,27 @@ unit("detached elements stay quiet", () => {
   jorn.patch([{ op: "truncate", path: [], length: 0 }]);
   button.dispatchEvent(new window.Event("click"));
   check(sent.length === 0, "no report from a removed element");
+});
+
+unit("events caused by a patch aren't reported", () => {
+  // Chrome fires blur when a patch removes the focused element. jsdom doesn't,
+  // so a custom element stands in: it blurs the input while it's being removed.
+  let input;
+  window.customElements.define(
+    "jorn-test-probe",
+    class extends window.HTMLElement {
+      disconnectedCallback() {
+        input.dispatchEvent(new window.Event("blur"));
+      }
+    },
+  );
+  const { container, sent, jorn } = setup();
+  jorn.mount(el("div", {}, [el("input", { events: { blur: opts() } }), el("jorn-test-probe")]));
+  input = container.firstChild.firstChild;
+  jorn.patch([{ op: "truncate", path: [], length: 1 }]);
+  check(sent.length === 0, "no report from an event fired mid-patch", { sent });
+  input.dispatchEvent(new window.Event("blur"));
+  check(sent.length === 1, "the same handler still reports afterwards", { sent });
 });
 
 unit("protocol violations throw", () => {

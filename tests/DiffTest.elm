@@ -148,6 +148,20 @@ unit =
             \_ ->
                 node (Html.input [ Attr.defaultValue "a", Attr.defaultChecked True ])
                     |> Expect.equal (node (Html.input [ Attr.property "defaultValue" (Encode.string "a"), Attr.property "defaultChecked" (Encode.bool True) ]))
+        , test "ARIA attributes are aria- attributes with string values" <|
+            \_ ->
+                node (Html.button [ Attr.role "switch", Attr.ariaChecked "mixed", Attr.ariaLabelledby "a b", Attr.aria "braillelabel" "x" ] [])
+                    |> Expect.equal
+                        (node
+                            (Html.button
+                                [ Attr.attribute "role" "switch"
+                                , Attr.attribute "aria-checked" "mixed"
+                                , Attr.attribute "aria-labelledby" "a b"
+                                , Attr.attribute "aria-braillelabel" "x"
+                                ]
+                                []
+                            )
+                        )
         , test "property change" <|
             \_ ->
                 Jorn.Patch.diff
@@ -227,6 +241,19 @@ unit =
                     (Html.div [] [])
                     (Html.div [ Events.preventDefault (Attr.id "x") ] [])
                     |> expectPatches [ SetAttribute [] "id" "x" ]
+        , test "event helpers ask for exactly the fields they decode" <|
+            \_ ->
+                node (Html.input [ Events.onKeydown identity, Events.onChange identity, Events.onFocus "f", Events.onMouseEnter "e" ])
+                    |> Expect.equal
+                        (node
+                            (Html.input
+                                [ Events.include [ "key" ] (Events.on "keydown" (Decode.succeed ""))
+                                , Events.include [ "target.value" ] (Events.on "change" (Decode.succeed ""))
+                                , Events.on "focus" (Decode.succeed "")
+                                , Events.on "mouseenter" (Decode.succeed "")
+                                ]
+                            )
+                        )
         , test "children appended" <|
             \_ ->
                 Jorn.Patch.diff
