@@ -67,6 +67,8 @@ update msg model =
                             , ( "c", Jorn.Patch.encodeHtml c )
                             , ( "ab", Jorn.Patch.encode (Jorn.Patch.diff a b) )
                             , ( "bc", Jorn.Patch.encode (Jorn.Patch.diff b c) )
+                            , ( "keepAB", encodeSurvivors (survivors a b) )
+                            , ( "keepBC", encodeSurvivors (survivors b c) )
                             ]
                     )
                     labelled
@@ -131,6 +133,9 @@ mutate html =
         Fragment kids ->
             Random.map Fragment (mutateChildren "" kids)
 
+        Keyed key kid ->
+            Random.map (Keyed key) (mutate kid)
+
         Element ns tag closing attrs kids ->
             Random.weighted ( 40, Random.constant Nothing ) [ ( 1, Random.map Just (tree 2) ) ]
                 |> Random.andThen identity
@@ -154,6 +159,9 @@ mutateChildren tag kids =
     if tag == "input" then
         Random.constant []
 
+    else if List.any isKeyed kids then
+        mutateKeyed kids
+
     else
         Random.map3
             (\mutated extra dropLast ->
@@ -170,6 +178,51 @@ mutateChildren tag kids =
             (traverse mutate kids)
             (Random.weighted ( 12, Random.constant [] ) [ ( 1, Random.map List.singleton (tree 2) ) ] |> Random.andThen identity)
             (Random.weighted ( 12, False ) [ ( 1, True ) ])
+
+
+{-| What keyed lists go through: items edited in place, then sometimes
+shuffled, thinned out, or given new items anywhere.
+-}
+mutateKeyed : List (Vdom.Element ()) -> Generator (List (Vdom.Element ()))
+mutateKeyed kids =
+    traverse mutate kids
+        |> Random.andThen (\mutated -> Random.weighted ( 1, shuffle mutated ) [ ( 1, Random.constant mutated ) ] |> Random.andThen identity)
+        |> Random.andThen (\items -> Random.list (List.length items) (Random.weighted ( 5, True ) [ ( 1, False ) ]) |> Random.map (keepWhere items))
+        |> Random.andThen
+            (\items ->
+                Random.int 0 2
+                    |> Random.andThen (\n -> Random.list n (Random.pair (Random.int 0 (List.length items)) (keyedChild 2)))
+                    |> Random.map (List.foldl (\( at, item ) acc -> List.take at acc ++ item :: List.drop at acc) items)
+            )
+
+
+shuffle : List a -> Generator (List a)
+shuffle items =
+    Random.list (List.length items) (Random.float 0 1)
+        |> Random.map (\weights -> List.map2 Tuple.pair weights items |> List.sortBy Tuple.first |> List.map Tuple.second)
+
+
+keepWhere : List a -> List Bool -> List a
+keepWhere items keeps =
+    List.map2 Tuple.pair keeps items
+        |> List.filterMap
+            (\( keep, item ) ->
+                if keep then
+                    Just item
+
+                else
+                    Nothing
+            )
+
+
+isKeyed : Vdom.Element msg -> Bool
+isKeyed html =
+    case html of
+        Keyed _ _ ->
+            True
+
+        _ ->
+            False
 
 
 traverse : (a -> Generator b) -> List a -> Generator (List b)
@@ -190,8 +243,27 @@ tree depth =
         text
 
     else
-        Random.weighted ( 1, text ) [ ( 3, element depth ), ( 1, fragment depth ) ]
+        Random.weighted ( 1, text ) [ ( 3, element depth ), ( 1, fragment depth ), ( 1, keyedList depth ) ]
             |> Random.andThen identity
+
+
+{-| Keys from a small alphabet, so they repeat and consecutive lists overlap.
+A few children go unkeyed, and some keyed children sit inside fragments.
+-}
+keyedList : Int -> Generator (Vdom.Element ())
+keyedList depth =
+    Random.map2 (Element "" "ul" Vdom.Normal)
+        (Random.int 0 2 |> Random.andThen (\n -> Random.list n attribute) |> Random.map dedupe)
+        (Random.int 0 6 |> Random.andThen (\n -> Random.list n (keyedChild (depth - 1))))
+
+
+keyedChild : Int -> Generator (Vdom.Element ())
+keyedChild depth =
+    Random.weighted ( 8, Random.map2 Keyed (Random.uniform "a" [ "b", "c", "d", "e", "f" ]) (tree depth) )
+        [ ( 1, tree depth )
+        , ( 1, Random.map2 (\k kid -> Fragment [ Keyed k kid ]) (Random.uniform "g" [ "h" ]) (tree depth) )
+        ]
+        |> Random.andThen identity
 
 
 {-| Fragments nest, and can be empty: `none` is the empty fragment.
@@ -314,6 +386,10 @@ labelHelp html next =
             labelChildren kids next
                 |> Tuple.mapFirst Fragment
 
+        Keyed key kid ->
+            labelHelp kid next
+                |> Tuple.mapFirst (Keyed key)
+
         Element ns tag closing attrs kids ->
             let
                 id =
@@ -356,3 +432,57 @@ relabel id attr =
 
         Vdom.Options options wrapped ->
             Vdom.Options options (relabel id wrapped)
+
+
+
+-- SURVIVORS
+
+
+{-| The nodes that should keep their DOM node from one view to the next, as
+pairs of paths: the same node in both, matched the way the diff matches them,
+by key where there are keys and by position otherwise. The test checks that
+the patcher really moves these nodes rather than recreating them.
+-}
+survivors : Vdom.Element msg -> Vdom.Element msg -> List ( List Int, List Int )
+survivors old new =
+    survivorsHelp [] [] (Vdom.root old) (Vdom.root new) []
+
+
+survivorsHelp : List Int -> List Int -> Vdom.Element msg -> Vdom.Element msg -> List ( List Int, List Int ) -> List ( List Int, List Int )
+survivorsHelp oldPath newPath old new acc =
+    case ( old, new ) of
+        ( Text _, Text _ ) ->
+            ( List.reverse oldPath, List.reverse newPath ) :: acc
+
+        ( Element oldNs oldTag _ _ oldKids, Element newNs newTag _ _ newKids ) ->
+            if oldNs == newNs && oldTag == newTag then
+                matchChildren (Vdom.flatten oldKids) (Vdom.flatten newKids)
+                    |> List.foldl
+                        (\( ( i, o ), ( j, n ) ) a -> survivorsHelp (i :: oldPath) (j :: newPath) o n a)
+                        (( List.reverse oldPath, List.reverse newPath ) :: acc)
+
+            else
+                acc
+
+        _ ->
+            acc
+
+
+matchChildren : List (Vdom.Element msg) -> List (Vdom.Element msg) -> List ( ( Int, Vdom.Element msg ), ( Int, Vdom.Element msg ) )
+matchChildren olds news =
+    if List.any isKeyed olds || List.any isKeyed news then
+        let
+            oldByKey =
+                Vdom.keys olds |> List.indexedMap (\i ( k, o ) -> ( k, ( i, o ) )) |> Dict.fromList
+        in
+        Vdom.keys news
+            |> List.indexedMap (\j ( k, n ) -> Dict.get k oldByKey |> Maybe.map (\match -> ( match, ( j, n ) )))
+            |> List.filterMap identity
+
+    else
+        List.map2 Tuple.pair (List.indexedMap Tuple.pair olds) (List.indexedMap Tuple.pair news)
+
+
+encodeSurvivors : List ( List Int, List Int ) -> Value
+encodeSurvivors pairs =
+    Encode.list (\( a, b ) -> Encode.list (Encode.list Encode.int) [ a, b ]) pairs

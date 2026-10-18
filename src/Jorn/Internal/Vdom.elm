@@ -10,10 +10,12 @@ module Jorn.Internal.Vdom exposing
     , encodeOptions
     , facts
     , flatten
+    , keys
     , map
     , mapAttribute
     , root
     , toNode
+    , unkey
     )
 
 {-| Internal representation. Not exposed from the package, so constructors
@@ -28,6 +30,7 @@ and what every patch and mount payload is made of.
 import Dict exposing (Dict)
 import Json.Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
+import Set exposing (Set)
 
 
 type Element msg
@@ -35,6 +38,7 @@ type Element msg
       -- namespace, tag, how it closes, attributes, children
     | Text String
     | Fragment (List (Element msg))
+    | Keyed String (Element msg)
 
 
 {-| How an element's tags are written as HTML. Only rendering to a string
@@ -176,48 +180,131 @@ mergeClass value existing =
 
 
 
--- FRAGMENTS
+-- FRAGMENTS AND KEYS
 
 
 {-| Splice fragments into the surrounding list of children, at any depth.
 Fragments never reach the wire: paths, patches and mounts only ever see the
-flattened children. Most lists hold no fragments, and those come back as they
-are, without being rebuilt.
+flattened children.
+
+Keys survive flattening, as a `Keyed` wrapped directly around a child that is
+neither a fragment nor keyed itself. A key on a fragment applies to each of
+its children, and the outermost key wins.
+
+Most lists need none of this, and those come back as they are, without being
+rebuilt.
+
 -}
 flatten : List (Element msg) -> List (Element msg)
 flatten children =
-    if List.any isFragment children then
-        List.foldr spliceChild [] children
+    if List.any needsSplicing children then
+        List.foldr (spliceChild Nothing) [] children
 
     else
         children
 
 
-spliceChild : Element msg -> List (Element msg) -> List (Element msg)
-spliceChild child acc =
+spliceChild : Maybe String -> Element msg -> List (Element msg) -> List (Element msg)
+spliceChild key child acc =
     case child of
         Fragment grandchildren ->
-            List.foldr spliceChild acc grandchildren
+            List.foldr (spliceChild key) acc grandchildren
+
+        Keyed inner wrapped ->
+            spliceChild (Just (Maybe.withDefault inner key)) wrapped acc
 
         _ ->
-            child :: acc
+            case key of
+                Just k ->
+                    Keyed k child :: acc
+
+                Nothing ->
+                    child :: acc
 
 
-isFragment : Element msg -> Bool
-isFragment html =
+needsSplicing : Element msg -> Bool
+needsSplicing html =
     case html of
         Fragment _ ->
+            True
+
+        Keyed _ (Fragment _) ->
+            True
+
+        Keyed _ (Keyed _ _) ->
             True
 
         _ ->
             False
 
 
+{-| The child under its key, if it has one.
+-}
+unkey : Element msg -> Element msg
+unkey html =
+    case html of
+        Keyed _ wrapped ->
+            unkey wrapped
+
+        _ ->
+            html
+
+
+{-| A unique key for every child of a flattened list. Children without a key
+are numbered among themselves, so the third unkeyed child in one render
+matches the third in the next. A key that repeats gets its occurrence number,
+so duplicates match in order instead of colliding. Generated keys use control
+characters, which keeps them apart from anything a view would use.
+-}
+keys : List (Element msg) -> List ( String, Element msg )
+keys children =
+    let
+        step child acc =
+            let
+                ( raw, unkeyed ) =
+                    case child of
+                        Keyed key _ ->
+                            ( key, acc.unkeyed )
+
+                        _ ->
+                            ( "\u{0000}" ++ String.fromInt acc.unkeyed, acc.unkeyed + 1 )
+
+                ( key_, occurrence ) =
+                    unique acc.seen raw (Maybe.withDefault 1 (Dict.get raw acc.occurrences))
+            in
+            { pairs = ( key_, unkey child ) :: acc.pairs
+            , unkeyed = unkeyed
+            , seen = Set.insert key_ acc.seen
+            , occurrences = Dict.insert raw (occurrence + 1) acc.occurrences
+            }
+    in
+    List.foldl step { pairs = [], unkeyed = 0, seen = Set.empty, occurrences = Dict.empty } children
+        |> .pairs
+        |> List.reverse
+
+
+unique : Set String -> String -> Int -> ( String, Int )
+unique seen raw occurrence =
+    let
+        candidate =
+            if occurrence == 1 then
+                raw
+
+            else
+                raw ++ "\u{0001}" ++ String.fromInt occurrence
+    in
+    if Set.member candidate seen then
+        unique seen raw (occurrence + 1)
+
+    else
+        ( candidate, occurrence )
+
+
 {-| The node a view puts on screen. A view's root is a single node on the
 wire, so a fragment at the root needs a stand-in: with no children it's an
 empty text node, with one it's that child, and with several they're wrapped in
 a `jorn-fragment` element styled `display: contents`, which leaves layout as
-if the wrapper weren't there.
+if the wrapper weren't there. A key at the root means nothing and is dropped.
 -}
 root : Element msg -> Element msg
 root html =
@@ -228,10 +315,13 @@ root html =
                     Text ""
 
                 [ only ] ->
-                    only
+                    unkey only
 
                 several ->
                     Element "" "jorn-fragment" Normal [ Attr "style" "display: contents" ] several
+
+        Keyed _ wrapped ->
+            root wrapped
 
         _ ->
             html
@@ -261,6 +351,9 @@ toNode html =
 
         Fragment _ ->
             toNode (root html)
+
+        Keyed _ wrapped ->
+            toNode wrapped
 
         Element namespace tag _ attributes children ->
             let
@@ -321,6 +414,9 @@ map f html =
 
         Fragment children ->
             Fragment (List.map (map f) children)
+
+        Keyed key wrapped ->
+            Keyed key (map f wrapped)
 
 
 mapAttribute : (a -> b) -> Attribute a -> Attribute b

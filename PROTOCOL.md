@@ -8,7 +8,7 @@ A path is a list of child indices from the root. The root is `[]`. `[1, 0]` is t
 
 ## Fragments
 
-Fragments never appear on the wire. Before diffing or encoding, a fragment's children are spliced into its parent's child list, at any depth, and `none` (the empty fragment) disappears. Paths count the spliced children.
+Fragments and keys never appear on the wire. Before diffing or encoding, a fragment's children are spliced into its parent's child list, at any depth, and `none` (the empty fragment) disappears. Paths count the spliced children.
 
 A view's root is always a single node. A fragment at the root becomes an empty text node if it has no children, its child if it has one, and otherwise a `jorn-fragment` element with `style="display: contents"` holding the children.
 
@@ -42,6 +42,11 @@ A patch message is a JSON array of patches. **Apply them strictly in order.** Th
 | `remove-event` | `name` | Remove the listener |
 | `append` | `nodes` | Append children to the element at `path` |
 | `truncate` | `length` | Remove children from index `length` onward |
+| `insert` | `index`, `node` | Insert a child so it ends up at `index` (`index` equal to the child count appends) |
+| `move` | `from`, `to` | Move the child at `from` so it ends up at `to`, counting with it taken out. The DOM node moves, it isn't recreated |
+| `remove` | `index` | Remove the child at `index` |
+
+**Keyed children.** `insert`, `move` and `remove` come from keyed children, which are matched by key rather than position. For one parent, the diff sends its `remove` patches first (highest index first), then its `move` and `insert` patches, each index valid at the moment it's applied, and only then patches aimed at the children themselves, at their final positions. Keys stay in Elm: they never appear on the wire.
 
 **Live state.** `value` on `input`, `textarea` and `select`, `checked` on `input`, and `selected` on `option` are sent as attributes, so they appear in server-rendered HTML. Once a user has typed or clicked, the attribute no longer controls what's on screen, so after setting or removing one of these attributes the client copies it onto the live property. `value` is only written when it differs, which leaves the caret where it is.
 
