@@ -9,6 +9,8 @@ elm make src/Main.elm --output=build/main.js
 node ../serve.mjs
 ```
 
+The same program also runs on the server. Install the server's dependencies once with `(cd ../../server && npm install)`, start `serve.mjs` again, and open http://localhost:8000/examples/todos/server.html. `src/Main.elm` doesn't change: `server.html` calls `stream` instead of `start`, `update` and `view` run in Node, and focus and saving still happen in the page.
+
 ## What it shows
 
 - **The wiring.** Two port declarations at the top of `src/Main.elm`, and one `start` call in `index.html`. That's all of it.
@@ -20,4 +22,4 @@ node ../serve.mjs
 - **ARIA.** The ring is a `progressbar` with its values, the filter buttons say which one is pressed, and the count is a live region.
 - **`Element.none`** for parts that come and go, like the footer and the Clear completed button.
 
-CI builds the example and uses it in jsdom with [client/test/example.mjs](../../client/test/example.mjs): adding, ticking, editing, filtering and deleting.
+CI builds the example and uses it in jsdom with [client/test/example.mjs](../../client/test/example.mjs): adding, ticking, editing, filtering and deleting, once in the page and once on a server.

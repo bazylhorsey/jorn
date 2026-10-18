@@ -1,18 +1,34 @@
 // Runs examples/todos the way its page does, in jsdom, and uses it like a
-// person would: add, tick, edit, filter, delete.
+// person would: add, tick, edit, filter, delete. With `server`, the app runs
+// on a server and the page streams it over a websocket, the way
+// server.html does, and the same checks have to pass.
 //
-// Usage: node client/test/example.mjs
+// Usage: node client/test/example.mjs [server]
 // Build first: cd examples/todos && elm make src/Main.elm --output=build/main.js
+// Server mode also needs `npm install` in server/.
 
 import { JSDOM } from "jsdom";
+import { createServer } from "node:http";
 import { createRequire } from "node:module";
-import { start } from "../jorn.js";
+import { start, stream } from "../jorn.js";
 
-const { window } = new JSDOM("<!doctype html><html><body><div id=app></div></body></html>");
-const { document } = window;
+const onServer = process.argv[2] === "server";
 
 const require = createRequire(import.meta.url);
 const { Elm } = require("../../examples/todos/build/main.js");
+
+let server = null;
+let origin = "http://localhost/";
+if (onServer) {
+  const { attach } = await import("../../server/jorn.js");
+  server = createServer((request, response) => response.writeHead(404).end());
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  origin = `http://127.0.0.1:${server.address().port}/`;
+  attach(server, { path: "/socket", program: Elm.Main, flags: ({ page }) => page });
+}
+
+const { window } = new JSDOM("<!doctype html><html><body><div id=app></div></body></html>", { url: origin });
+const { document } = window;
 
 let failed = 0;
 function check(condition, what, detail = {}) {
@@ -22,8 +38,22 @@ function check(condition, what, detail = {}) {
   }
 }
 
-// Frames come from setTimeout in jsdom, so a few ticks let one render land.
-const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
+// In the page, frames come from setTimeout in jsdom, so a few ticks let one
+// render land. Over a socket, wait until the page has been still for a while.
+const settle = () =>
+  new Promise((resolve) => {
+    if (!onServer) return setTimeout(resolve, 20);
+    let timer = setTimeout(done, 60);
+    const observer = new window.MutationObserver(() => {
+      clearTimeout(timer);
+      timer = setTimeout(done, 60);
+    });
+    observer.observe(document.body, { subtree: true, childList: true, attributes: true, characterData: true });
+    function done() {
+      observer.disconnect();
+      resolve();
+    }
+  });
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 const titles = () => $$("li label").map((label) => label.textContent);
@@ -46,10 +76,11 @@ async function click(element) {
 }
 
 const saved = [];
-start(Elm.Main, $("#app"), {
+const options = {
   flags: [{ id: 1, title: "Read the docs", done: true }],
   effects: { save: (todos) => saved.push(todos) },
-});
+};
+const app = onServer ? stream($("#app"), "/socket", options) : start(Elm.Main, $("#app"), options);
 await settle();
 
 check(JSON.stringify(titles()) === '["Read the docs"]', "starts from the saved list", { titles: titles() });
@@ -111,8 +142,14 @@ await click($("li button[aria-label^=Delete]"));
 check($("footer") === null, "the footer goes when the list is empty");
 check(JSON.stringify(saved.at(-1)) === "[]", "saves the empty list");
 
+if (onServer) {
+  app.close();
+  window.close();
+  await new Promise((resolve) => server.close(resolve));
+}
+
 if (failed) {
   console.log(`FAILED: ${failed} problems`);
   process.exit(1);
 }
-console.log("PASSED: the todos example adds, ticks, edits, filters and deletes, and saves every change.");
+console.log(`PASSED: the todos example${onServer ? ", running on a server," : ""} adds, ticks, edits, filters and deletes, and saves every change.`);

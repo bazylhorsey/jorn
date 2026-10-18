@@ -17,8 +17,9 @@
 //   jorn.mount(tree);      // once
 //   jorn.patch(patches);   // after every update, in order
 //
-// For an app built with Jorn.simple or Jorn.application running in the page,
-// `start` does all of that for you.
+// For an app built with Jorn.simple or Jorn.application, `start` does all of
+// that for you when the program runs in the page, and `stream` does it when
+// the program runs on a server (server/jorn.js).
 
 const LIVE = {
   value: new Set(["input", "textarea", "select"]),
@@ -415,12 +416,7 @@ export function start(program, container, { flags, effects = {}, ports = {} } = 
 
   function receive(message) {
     if (!running) return;
-    if (message.mount) jorn.mount(message.mount);
-    if (message.patches) {
-      jorn.patch(message.patches);
-      jorn.run(message.instructions ?? []);
-      if (message.painted) into.send({ painted: true });
-    }
+    draw(jorn, message, () => into.send({ painted: true }));
     if (message.frame) nextFrame(() => running && into.send({ frame: true }));
     if (message.error) console.warn(`Jorn: ${message.error}`);
   }
@@ -436,6 +432,81 @@ export function start(program, container, { flags, effects = {}, ports = {} } = 
       jorn.unmount();
     },
   };
+}
+
+/**
+ * Show a Jorn program that runs on a server in `container`, in server mode:
+ * the program runs in `server/jorn.js`, and this page applies its patches and
+ * sends back events over a websocket.
+ *
+ *   import { stream } from "./jorn.js";
+ *
+ *   const app = stream(document.getElementById("app"), "/app", {
+ *     flags,                                   // sent to the server, untrusted there
+ *     effects: { copy: (text) => ... },        // for Effect.client
+ *   });
+ *   app.close();                               // disconnect and empty the container
+ *
+ * A relative `url` is resolved against the page's address, and `http` and
+ * `https` become `ws` and `wss`.
+ *
+ * @param {Element} container
+ * @param {string | URL} url
+ * @param {{ flags?: unknown, effects?: Record<string, Function> }} options
+ */
+export function stream(container, url, { flags, effects = {} } = {}) {
+  const view = container?.ownerDocument?.defaultView;
+  const Socket = view?.WebSocket ?? globalThis.WebSocket;
+  if (typeof Socket !== "function") {
+    throw new TypeError("Jorn: stream needs a browser with WebSocket");
+  }
+  const address = new URL(url, view?.location?.href);
+  if (address.protocol === "http:") address.protocol = "ws:";
+  if (address.protocol === "https:") address.protocol = "wss:";
+
+  const socket = new Socket(address.href);
+  let running = true;
+  const post = (message) => {
+    if (running && socket.readyState === socket.OPEN) socket.send(JSON.stringify(message));
+  };
+  const jorn = connect(container, { send: (event) => post({ event }), effects });
+
+  socket.addEventListener("open", () => post({ join: { protocol: 0, flags } }));
+  socket.addEventListener("message", ({ data }) => {
+    if (!running) return;
+    let message;
+    try {
+      message = JSON.parse(data);
+    } catch {
+      console.warn("Jorn: the server sent something that isn't JSON");
+      return;
+    }
+    draw(jorn, message, () => post({ painted: true }));
+  });
+  socket.addEventListener("close", ({ code, reason }) => {
+    if (running && code !== 1000) console.warn(`Jorn: the server closed the connection (${code}${reason ? `: ${reason}` : ""})`);
+  });
+
+  return {
+    /** Disconnect and empty the container. */
+    close() {
+      if (!running) return;
+      running = false;
+      socket.close(1000);
+      jorn.unmount();
+    },
+  };
+}
+
+// What both modes do with a message from the program: mount it, or apply
+// its patches and then its instructions, and say so if it asked.
+function draw(jorn, message, painted) {
+  if (message.mount) jorn.mount(message.mount);
+  if (message.patches) {
+    jorn.patch(message.patches);
+    jorn.run(message.instructions ?? []);
+    if (message.painted) painted();
+  }
 }
 
 // Copy the requested dotted fields (like "target.value") off an event into

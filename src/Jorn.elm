@@ -36,6 +36,11 @@ an element:
 
     start(Elm.Main, document.getElementById("app"));
 
+The same program can run on a server instead, with `attach` from
+`server/jorn.js` on Node and `stream` from `client/jorn.js` in the page.
+Nothing in your Elm code changes: `update`, `view` and commands run on the
+server, and focus, scrolling and `Effect.client` run in the page.
+
 
 # Programs
 
