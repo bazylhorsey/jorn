@@ -90,6 +90,27 @@ suite =
                     |> Decode.decodeString Event.decoder
                     |> Result.map (\e -> Event.route e view)
                     |> Expect.equal (Ok (Ok Clicked))
+        , test "paths count a fragment's children as the parent's own" <|
+            \_ ->
+                Event.route (incoming [ 3 ] "click" noPayload)
+                    (Html.div []
+                        [ Element.none
+                        , Element.text "a"
+                        , Element.fragment [ Element.text "b", Element.fragment [ Element.none, Element.text "c" ] ]
+                        , Element.fragment [ Html.button [ Events.onClick Clicked ] [] ]
+                        ]
+                    )
+                    |> Expect.equal (Ok Clicked)
+        , test "routes into a fragment at the root" <|
+            \_ ->
+                Event.route (incoming [ 1 ] "click" noPayload)
+                    (Element.fragment [ Element.text "a", Html.button [ Events.onClick Clicked ] [] ])
+                    |> Expect.equal (Ok Clicked)
+        , test "a root fragment with one child is that child" <|
+            \_ ->
+                Event.route (incoming [] "click" noPayload)
+                    (Element.fragment [ Element.none, Html.button [ Events.onClick Clicked ] [] ])
+                    |> Expect.equal (Ok Clicked)
         , test "errors render readably" <|
             \_ ->
                 Event.errorToString (NoHandler [ 1, 1 ] "input")

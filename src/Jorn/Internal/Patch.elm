@@ -36,11 +36,12 @@ type Patch
 
 diff : Element msg -> Element msg -> List Patch
 diff old new =
-    List.reverse (diffHelp [] old new [])
+    List.reverse (diffHelp [] (Vdom.root old) (Vdom.root new) [])
 
 
 {-| `reversedPath` and the accumulator are both built backwards for cheap
-consing; each is reversed exactly once.
+consing; each is reversed exactly once. Neither tree is a fragment here: the
+root has been resolved and children are flattened before they're compared.
 -}
 diffHelp : List Int -> Element msg -> Element msg -> List Patch -> List Patch
 diffHelp reversedPath old new acc =
@@ -52,7 +53,7 @@ diffHelp reversedPath old new acc =
             else
                 SetText (List.reverse reversedPath) b :: acc
 
-        ( Element oldNs oldTag oldAttrs oldKids, Element newNs newTag newAttrs newKids ) ->
+        ( Element oldNs oldTag _ oldAttrs oldKids, Element newNs newTag _ newAttrs newKids ) ->
             if oldNs == newNs && oldTag == newTag then
                 (case ( oldAttrs, newAttrs ) of
                     -- Fast path: most elements have no attributes, and building
@@ -64,7 +65,7 @@ diffHelp reversedPath old new acc =
                     _ ->
                         diffFacts (List.reverse reversedPath) (Vdom.facts oldAttrs) (Vdom.facts newAttrs) acc
                 )
-                    |> diffChildren reversedPath 0 oldKids newKids
+                    |> diffChildren reversedPath 0 (Vdom.flatten oldKids) (Vdom.flatten newKids)
 
             else
                 Replace (List.reverse reversedPath) (Vdom.toNode new) :: acc
