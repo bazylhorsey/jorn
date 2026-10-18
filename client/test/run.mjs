@@ -360,6 +360,26 @@ unit("events caused by a patch aren't reported", () => {
   check(sent.length === 1, "the same handler still reports afterwards", { sent });
 });
 
+unit("names that lead to a prototype are ignored", () => {
+  const { container, sent, jorn } = setup();
+  // Parsed, because a `__proto__` key in an object literal sets the prototype.
+  const props = JSON.parse('{ "__proto__": { "polluted": true }, "constructor": 1, "title": "kept" }');
+  const include = ["__proto__.NONE", "constructor.name", "type"];
+  jorn.mount(el("div", { props, events: { click: opts({ include }) } }));
+  const div = container.firstChild;
+  const untouched = () => Object.getPrototypeOf(div) === window.HTMLDivElement.prototype && div.constructor === window.HTMLDivElement;
+  check(untouched(), "mount leaves the element's prototype alone");
+  check(div.title === "kept", "other properties still apply");
+  jorn.patch([
+    { op: "set-prop", path: [], name: "__proto__", value: { polluted: true } },
+    { op: "remove-prop", path: [], name: "constructor" },
+  ]);
+  check(untouched(), "patches leave it alone too");
+  div.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  check(JSON.stringify(sent.map((e) => Object.keys(e.event))) === '[["type"]]', "event fields through a prototype are dropped", { sent });
+  check({}.NONE === undefined && {}.polluted === undefined, "Object.prototype is untouched");
+});
+
 unit("protocol violations throw", () => {
   const { jorn } = setup();
   jorn.mount(el("div", {}, [text("t")]));
@@ -372,6 +392,7 @@ unit("protocol violations throw", () => {
     }
   };
   check(throws({ op: "set-text", path: [5], text: "x" }), "missing path throws");
+  check(throws({ op: "set-prop", path: ["__proto__"], name: "x", value: 1 }), "a path step that isn't an index throws");
   check(throws({ op: "set-attr", path: [0], name: "a", value: "b" }), "attr on text throws");
   check(throws({ op: "set-text", path: [], text: "x" }), "text on element throws");
   check(throws({ op: "explode", path: [] }), "unknown op throws");
