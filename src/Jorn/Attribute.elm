@@ -26,6 +26,18 @@ module Jorn.Attribute exposing
     , shadowrootserializable
     , colspan, rowspan, span, headers, scope, abbr
     , datetime
+    , role, aria
+    , ariaActivedescendant, ariaAtomic, ariaAutocomplete, ariaBraillelabel
+    , ariaBrailleroledescription, ariaBusy, ariaChecked, ariaColcount
+    , ariaColindex, ariaColindextext, ariaColspan, ariaControls, ariaCurrent
+    , ariaDescribedby, ariaDescription, ariaDetails, ariaDisabled
+    , ariaErrormessage, ariaExpanded, ariaFlowto, ariaHaspopup, ariaHidden
+    , ariaInvalid, ariaKeyshortcuts, ariaLabel, ariaLabelledby, ariaLevel
+    , ariaLive, ariaModal, ariaMultiline, ariaMultiselectable, ariaOrientation
+    , ariaOwns, ariaPlaceholder, ariaPosinset, ariaPressed, ariaReadonly
+    , ariaRelevant, ariaRequired, ariaRoledescription, ariaRowcount
+    , ariaRowindex, ariaRowindextext, ariaRowspan, ariaSelected, ariaSetsize
+    , ariaSort, ariaValuemax, ariaValuemin, ariaValuenow, ariaValuetext
     )
 
 {-| Attributes and properties.
@@ -143,6 +155,31 @@ For controls you don't want to keep in step with your model.
 # Dates
 
 @docs datetime
+
+
+# Accessibility
+
+`role` and the ARIA attributes. Every ARIA attribute takes a `String`, since
+ARIA values are tokens like `"true"`, `"mixed"` or `"page"`, not plain
+booleans:
+
+    Html.button [ Attribute.ariaPressed "mixed", Attribute.ariaControls "menu" ] []
+
+`aria "label" "Close"` sets any `aria-*` attribute, including ones added after
+this package was written.
+
+@docs role, aria
+@docs ariaActivedescendant, ariaAtomic, ariaAutocomplete, ariaBraillelabel
+@docs ariaBrailleroledescription, ariaBusy, ariaChecked, ariaColcount
+@docs ariaColindex, ariaColindextext, ariaColspan, ariaControls, ariaCurrent
+@docs ariaDescribedby, ariaDescription, ariaDetails, ariaDisabled
+@docs ariaErrormessage, ariaExpanded, ariaFlowto, ariaHaspopup, ariaHidden
+@docs ariaInvalid, ariaKeyshortcuts, ariaLabel, ariaLabelledby, ariaLevel
+@docs ariaLive, ariaModal, ariaMultiline, ariaMultiselectable, ariaOrientation
+@docs ariaOwns, ariaPlaceholder, ariaPosinset, ariaPressed, ariaReadonly
+@docs ariaRelevant, ariaRequired, ariaRoledescription, ariaRowcount
+@docs ariaRowindex, ariaRowindextext, ariaRowspan, ariaSelected, ariaSetsize
+@docs ariaSort, ariaValuemax, ariaValuemin, ariaValuenow, ariaValuetext
 
 -}
 
@@ -1014,6 +1051,377 @@ abbr =
 datetime : String -> Attribute msg
 datetime =
     attribute "datetime"
+
+
+{-| The element's ARIA role, like `"button"`, `"dialog"` or `"tab"`.
+-}
+role : String -> Attribute msg
+role =
+    attribute "role"
+
+
+{-| Any `aria-*` attribute: `aria "label" "Close"` sets `aria-label="Close"`.
+-}
+aria : String -> String -> Attribute msg
+aria name_ =
+    attribute ("aria-" ++ name_)
+
+
+{-| `aria-activedescendant`
+-}
+ariaActivedescendant : String -> Attribute msg
+ariaActivedescendant =
+    aria "activedescendant"
+
+
+{-| `aria-atomic`
+-}
+ariaAtomic : String -> Attribute msg
+ariaAtomic =
+    aria "atomic"
+
+
+{-| `aria-autocomplete`
+-}
+ariaAutocomplete : String -> Attribute msg
+ariaAutocomplete =
+    aria "autocomplete"
+
+
+{-| `aria-braillelabel`
+-}
+ariaBraillelabel : String -> Attribute msg
+ariaBraillelabel =
+    aria "braillelabel"
+
+
+{-| `aria-brailleroledescription`
+-}
+ariaBrailleroledescription : String -> Attribute msg
+ariaBrailleroledescription =
+    aria "brailleroledescription"
+
+
+{-| `aria-busy`
+-}
+ariaBusy : String -> Attribute msg
+ariaBusy =
+    aria "busy"
+
+
+{-| `aria-checked`
+-}
+ariaChecked : String -> Attribute msg
+ariaChecked =
+    aria "checked"
+
+
+{-| `aria-colcount`
+-}
+ariaColcount : String -> Attribute msg
+ariaColcount =
+    aria "colcount"
+
+
+{-| `aria-colindex`
+-}
+ariaColindex : String -> Attribute msg
+ariaColindex =
+    aria "colindex"
+
+
+{-| `aria-colindextext`
+-}
+ariaColindextext : String -> Attribute msg
+ariaColindextext =
+    aria "colindextext"
+
+
+{-| `aria-colspan`
+-}
+ariaColspan : String -> Attribute msg
+ariaColspan =
+    aria "colspan"
+
+
+{-| `aria-controls`
+-}
+ariaControls : String -> Attribute msg
+ariaControls =
+    aria "controls"
+
+
+{-| `aria-current`
+-}
+ariaCurrent : String -> Attribute msg
+ariaCurrent =
+    aria "current"
+
+
+{-| `aria-describedby`
+-}
+ariaDescribedby : String -> Attribute msg
+ariaDescribedby =
+    aria "describedby"
+
+
+{-| `aria-description`
+-}
+ariaDescription : String -> Attribute msg
+ariaDescription =
+    aria "description"
+
+
+{-| `aria-details`
+-}
+ariaDetails : String -> Attribute msg
+ariaDetails =
+    aria "details"
+
+
+{-| `aria-disabled`
+-}
+ariaDisabled : String -> Attribute msg
+ariaDisabled =
+    aria "disabled"
+
+
+{-| `aria-errormessage`
+-}
+ariaErrormessage : String -> Attribute msg
+ariaErrormessage =
+    aria "errormessage"
+
+
+{-| `aria-expanded`
+-}
+ariaExpanded : String -> Attribute msg
+ariaExpanded =
+    aria "expanded"
+
+
+{-| `aria-flowto`
+-}
+ariaFlowto : String -> Attribute msg
+ariaFlowto =
+    aria "flowto"
+
+
+{-| `aria-haspopup`
+-}
+ariaHaspopup : String -> Attribute msg
+ariaHaspopup =
+    aria "haspopup"
+
+
+{-| `aria-hidden`
+-}
+ariaHidden : String -> Attribute msg
+ariaHidden =
+    aria "hidden"
+
+
+{-| `aria-invalid`
+-}
+ariaInvalid : String -> Attribute msg
+ariaInvalid =
+    aria "invalid"
+
+
+{-| `aria-keyshortcuts`
+-}
+ariaKeyshortcuts : String -> Attribute msg
+ariaKeyshortcuts =
+    aria "keyshortcuts"
+
+
+{-| `aria-label`
+-}
+ariaLabel : String -> Attribute msg
+ariaLabel =
+    aria "label"
+
+
+{-| `aria-labelledby`
+-}
+ariaLabelledby : String -> Attribute msg
+ariaLabelledby =
+    aria "labelledby"
+
+
+{-| `aria-level`
+-}
+ariaLevel : String -> Attribute msg
+ariaLevel =
+    aria "level"
+
+
+{-| `aria-live`
+-}
+ariaLive : String -> Attribute msg
+ariaLive =
+    aria "live"
+
+
+{-| `aria-modal`
+-}
+ariaModal : String -> Attribute msg
+ariaModal =
+    aria "modal"
+
+
+{-| `aria-multiline`
+-}
+ariaMultiline : String -> Attribute msg
+ariaMultiline =
+    aria "multiline"
+
+
+{-| `aria-multiselectable`
+-}
+ariaMultiselectable : String -> Attribute msg
+ariaMultiselectable =
+    aria "multiselectable"
+
+
+{-| `aria-orientation`
+-}
+ariaOrientation : String -> Attribute msg
+ariaOrientation =
+    aria "orientation"
+
+
+{-| `aria-owns`
+-}
+ariaOwns : String -> Attribute msg
+ariaOwns =
+    aria "owns"
+
+
+{-| `aria-placeholder`
+-}
+ariaPlaceholder : String -> Attribute msg
+ariaPlaceholder =
+    aria "placeholder"
+
+
+{-| `aria-posinset`
+-}
+ariaPosinset : String -> Attribute msg
+ariaPosinset =
+    aria "posinset"
+
+
+{-| `aria-pressed`
+-}
+ariaPressed : String -> Attribute msg
+ariaPressed =
+    aria "pressed"
+
+
+{-| `aria-readonly`
+-}
+ariaReadonly : String -> Attribute msg
+ariaReadonly =
+    aria "readonly"
+
+
+{-| `aria-relevant`
+-}
+ariaRelevant : String -> Attribute msg
+ariaRelevant =
+    aria "relevant"
+
+
+{-| `aria-required`
+-}
+ariaRequired : String -> Attribute msg
+ariaRequired =
+    aria "required"
+
+
+{-| `aria-roledescription`
+-}
+ariaRoledescription : String -> Attribute msg
+ariaRoledescription =
+    aria "roledescription"
+
+
+{-| `aria-rowcount`
+-}
+ariaRowcount : String -> Attribute msg
+ariaRowcount =
+    aria "rowcount"
+
+
+{-| `aria-rowindex`
+-}
+ariaRowindex : String -> Attribute msg
+ariaRowindex =
+    aria "rowindex"
+
+
+{-| `aria-rowindextext`
+-}
+ariaRowindextext : String -> Attribute msg
+ariaRowindextext =
+    aria "rowindextext"
+
+
+{-| `aria-rowspan`
+-}
+ariaRowspan : String -> Attribute msg
+ariaRowspan =
+    aria "rowspan"
+
+
+{-| `aria-selected`
+-}
+ariaSelected : String -> Attribute msg
+ariaSelected =
+    aria "selected"
+
+
+{-| `aria-setsize`
+-}
+ariaSetsize : String -> Attribute msg
+ariaSetsize =
+    aria "setsize"
+
+
+{-| `aria-sort`
+-}
+ariaSort : String -> Attribute msg
+ariaSort =
+    aria "sort"
+
+
+{-| `aria-valuemax`
+-}
+ariaValuemax : String -> Attribute msg
+ariaValuemax =
+    aria "valuemax"
+
+
+{-| `aria-valuemin`
+-}
+ariaValuemin : String -> Attribute msg
+ariaValuemin =
+    aria "valuemin"
+
+
+{-| `aria-valuenow`
+-}
+ariaValuenow : String -> Attribute msg
+ariaValuenow =
+    aria "valuenow"
+
+
+{-| `aria-valuetext`
+-}
+ariaValuetext : String -> Attribute msg
+ariaValuetext =
+    aria "valuetext"
 
 
 {-| Boolean attributes: present (with an empty value) when true, and a `false`

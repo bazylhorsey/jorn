@@ -14,6 +14,7 @@
 - `Jorn.Element.Svg` has a function for every SVG element, in the SVG namespace (#13).
 - Global attributes in `Jorn.Attribute` (#4): `none`, `style`, `styles`, `title`, `lang`, `dir`, `data`, `tabindex`, `hidden`, `inert`, and the editing, popover, command and microdata attributes. Several `style` attributes on one element now accumulate into one, the way `class` does, including ones set with `attribute "style"`.
 - Element attributes in `Jorn.Attribute` for links, resources, media, forms, meta, templates, tables and dates (#5). Boolean ones reset the DOM property by its own spelling (`readonly` resets `readOnly`). `selected` keeps an option's live selection in step like `checked` does, and `defaultValue`, `defaultChecked` and `defaultSelected` start a control without controlling it.
+- `role`, a generic `aria`, and one function per ARIA attribute in `Jorn.Attribute` (#6). They all take a `String`, since ARIA values are tokens like `"mixed"` or `"page"`.
 
 ## v0.0 (2026-10-10)
 

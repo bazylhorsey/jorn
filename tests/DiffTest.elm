@@ -148,6 +148,20 @@ unit =
             \_ ->
                 node (Html.input [ Attr.defaultValue "a", Attr.defaultChecked True ])
                     |> Expect.equal (node (Html.input [ Attr.property "defaultValue" (Encode.string "a"), Attr.property "defaultChecked" (Encode.bool True) ]))
+        , test "ARIA attributes are aria- attributes with string values" <|
+            \_ ->
+                node (Html.button [ Attr.role "switch", Attr.ariaChecked "mixed", Attr.ariaLabelledby "a b", Attr.aria "braillelabel" "x" ] [])
+                    |> Expect.equal
+                        (node
+                            (Html.button
+                                [ Attr.attribute "role" "switch"
+                                , Attr.attribute "aria-checked" "mixed"
+                                , Attr.attribute "aria-labelledby" "a b"
+                                , Attr.attribute "aria-braillelabel" "x"
+                                ]
+                                []
+                            )
+                        )
         , test "property change" <|
             \_ ->
                 Jorn.Patch.diff
