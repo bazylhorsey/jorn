@@ -128,7 +128,10 @@ mutate html =
             Random.weighted ( 9, Random.constant html ) [ ( 1, tree 0 ), ( 0.3, tree 2 ) ]
                 |> Random.andThen identity
 
-        Element ns tag attrs kids ->
+        Fragment kids ->
+            Random.map Fragment (mutateChildren "" kids)
+
+        Element ns tag closing attrs kids ->
             Random.weighted ( 40, Random.constant Nothing ) [ ( 1, Random.map Just (tree 2) ) ]
                 |> Random.andThen identity
                 |> Random.andThen
@@ -138,7 +141,7 @@ mutate html =
                                 Random.constant other
 
                             Nothing ->
-                                Random.map2 (Element ns tag)
+                                Random.map2 (Element ns tag closing)
                                     (Random.weighted ( 12, Random.constant attrs ) [ ( 1, Random.int 0 3 |> Random.andThen (\n -> Random.list n attribute) |> Random.map dedupe ) ]
                                         |> Random.andThen identity
                                     )
@@ -187,8 +190,17 @@ tree depth =
         text
 
     else
-        Random.weighted ( 1, text ) [ ( 3, element depth ) ]
+        Random.weighted ( 1, text ) [ ( 3, element depth ), ( 1, fragment depth ) ]
             |> Random.andThen identity
+
+
+{-| Fragments nest, and can be empty: `none` is the empty fragment.
+-}
+fragment : Int -> Generator (Vdom.Element ())
+fragment depth =
+    Random.int 0 3
+        |> Random.andThen (\n -> Random.list n (tree (depth - 1)))
+        |> Random.map Fragment
 
 
 element : Int -> Generator (Vdom.Element ())
@@ -196,7 +208,7 @@ element depth =
     Random.uniform ( "", "div" ) [ ( "", "span" ), ( "", "li" ), ( "", "button" ), ( "", "input" ), ( "http://www.w3.org/2000/svg", "g" ) ]
         |> Random.andThen
             (\( ns, tag ) ->
-                Random.map2 (Element ns tag)
+                Random.map2 (Element ns tag Vdom.Normal)
                     (Random.int 0 4 |> Random.andThen (\n -> Random.list n attribute) |> Random.map dedupe)
                     (if tag == "input" then
                         Random.constant []
@@ -278,7 +290,18 @@ attrName attr =
 -}
 label : Vdom.Element () -> Vdom.Element String
 label html =
-    Tuple.first (labelHelp html 0)
+    case html of
+        Fragment kids ->
+            -- A root fragment with several children is wrapped in an element
+            -- of its own, which comes first on screen.
+            if List.length (Vdom.flatten kids) > 1 then
+                Tuple.first (labelChildren kids 1) |> Fragment
+
+            else
+                Tuple.first (labelChildren kids 0) |> Fragment
+
+        _ ->
+            Tuple.first (labelHelp html 0)
 
 
 labelHelp : Vdom.Element () -> Int -> ( Vdom.Element String, Int )
@@ -287,24 +310,36 @@ labelHelp html next =
         Text s ->
             ( Text s, next )
 
-        Element ns tag attrs kids ->
+        Fragment kids ->
+            labelChildren kids next
+                |> Tuple.mapFirst Fragment
+
+        Element ns tag closing attrs kids ->
             let
                 id =
                     String.fromInt next
 
                 ( newKids, after ) =
-                    List.foldl
-                        (\kid ( acc, n ) ->
-                            let
-                                ( k, n2 ) =
-                                    labelHelp kid n
-                            in
-                            ( acc ++ [ k ], n2 )
-                        )
-                        ( [], next + 1 )
-                        kids
+                    labelChildren kids (next + 1)
             in
-            ( Element ns tag (List.map (relabel id) attrs) newKids, after )
+            ( Element ns tag closing (List.map (relabel id) attrs) newKids, after )
+
+
+{-| A fragment isn't an element, so its children carry on the numbering of
+their parent's, which is the order they appear in on screen.
+-}
+labelChildren : List (Vdom.Element ()) -> Int -> ( List (Vdom.Element String), Int )
+labelChildren kids next =
+    List.foldl
+        (\kid ( acc, n ) ->
+            let
+                ( k, n2 ) =
+                    labelHelp kid n
+            in
+            ( acc ++ [ k ], n2 )
+        )
+        ( [], next )
+        kids
 
 
 relabel : String -> Vdom.Attribute () -> Vdom.Attribute String

@@ -6,6 +6,12 @@ Everything on the wire is JSON. The format is pinned by the golden tests in `tes
 
 A path is a list of child indices from the root. The root is `[]`. `[1, 0]` is the first child of the root's second child. Text nodes count as children.
 
+## Fragments
+
+Fragments never appear on the wire. Before diffing or encoding, a fragment's children are spliced into its parent's child list, at any depth, and `none` (the empty fragment) disappears. Paths count the spliced children.
+
+A view's root is always a single node. A fragment at the root becomes an empty text node if it has no children, its child if it has one, and otherwise a `jorn-fragment` element with `style="display: contents"` holding the children.
+
 ## Nodes
 
 ```json

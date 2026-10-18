@@ -1,5 +1,6 @@
 module Jorn.Internal.Vdom exposing
     ( Attribute(..)
+    , Closing(..)
     , Element(..)
     , EventOptions
     , Facts
@@ -8,8 +9,10 @@ module Jorn.Internal.Vdom exposing
     , encodeNode
     , encodeOptions
     , facts
+    , flatten
     , map
     , mapAttribute
+    , root
     , toNode
     )
 
@@ -28,9 +31,19 @@ import Json.Encode as Encode exposing (Value)
 
 
 type Element msg
-    = Element String String (List (Attribute msg)) (List (Element msg))
-      -- namespace, tag, attributes, children
+    = Element String String Closing (List (Attribute msg)) (List (Element msg))
+      -- namespace, tag, how it closes, attributes, children
     | Text String
+    | Fragment (List (Element msg))
+
+
+{-| How an element's tags are written as HTML. Only rendering to a string
+cares: the DOM, the diff and the wire are the same for all three.
+-}
+type Closing
+    = Normal
+    | Void
+    | SelfClosing
 
 
 type Attribute msg
@@ -163,6 +176,68 @@ mergeClass value existing =
 
 
 
+-- FRAGMENTS
+
+
+{-| Splice fragments into the surrounding list of children, at any depth.
+Fragments never reach the wire: paths, patches and mounts only ever see the
+flattened children. Most lists hold no fragments, and those come back as they
+are, without being rebuilt.
+-}
+flatten : List (Element msg) -> List (Element msg)
+flatten children =
+    if List.any isFragment children then
+        List.foldr spliceChild [] children
+
+    else
+        children
+
+
+spliceChild : Element msg -> List (Element msg) -> List (Element msg)
+spliceChild child acc =
+    case child of
+        Fragment grandchildren ->
+            List.foldr spliceChild acc grandchildren
+
+        _ ->
+            child :: acc
+
+
+isFragment : Element msg -> Bool
+isFragment html =
+    case html of
+        Fragment _ ->
+            True
+
+        _ ->
+            False
+
+
+{-| The node a view puts on screen. A view's root is a single node on the
+wire, so a fragment at the root needs a stand-in: with no children it's an
+empty text node, with one it's that child, and with several they're wrapped in
+a `jorn-fragment` element styled `display: contents`, which leaves layout as
+if the wrapper weren't there.
+-}
+root : Element msg -> Element msg
+root html =
+    case html of
+        Fragment children ->
+            case flatten children of
+                [] ->
+                    Text ""
+
+                [ only ] ->
+                    only
+
+                several ->
+                    Element "" "jorn-fragment" Normal [ Attr "style" "display: contents" ] several
+
+        _ ->
+            html
+
+
+
 -- PROJECTION
 
 
@@ -184,7 +259,10 @@ toNode html =
         Text content ->
             NodeText content
 
-        Element namespace tag attributes children ->
+        Fragment _ ->
+            toNode (root html)
+
+        Element namespace tag _ attributes children ->
             let
                 f =
                     facts attributes
@@ -195,7 +273,7 @@ toNode html =
                 , attrs = f.attrs
                 , props = f.props
                 , events = Dict.map (\_ ( options, _ ) -> options) f.events
-                , children = List.map toNode children
+                , children = List.map toNode (flatten children)
                 }
 
 
@@ -238,8 +316,11 @@ map f html =
         Text content ->
             Text content
 
-        Element namespace tag attributes children ->
-            Element namespace tag (List.map (mapAttribute f) attributes) (List.map (map f) children)
+        Element namespace tag closing attributes children ->
+            Element namespace tag closing (List.map (mapAttribute f) attributes) (List.map (map f) children)
+
+        Fragment children ->
+            Fragment (List.map (map f) children)
 
 
 mapAttribute : (a -> b) -> Attribute a -> Attribute b

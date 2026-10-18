@@ -58,14 +58,11 @@ type Error
 -}
 route : Incoming -> Element msg -> Result Error msg
 route incoming element =
-    case find incoming.path element of
+    case find incoming.path (Vdom.root element) of
         Nothing ->
             Err (NodeNotFound incoming.path)
 
-        Just (Vdom.Text _) ->
-            Err (NoHandler incoming.path incoming.name)
-
-        Just (Vdom.Element _ _ attributes _) ->
+        Just (Vdom.Element _ _ _ attributes _) ->
             case Dict.get incoming.name (Vdom.facts attributes).events of
                 Nothing ->
                     Err (NoHandler incoming.path incoming.name)
@@ -73,6 +70,9 @@ route incoming element =
                 Just ( _, handler ) ->
                     Decode.decodeValue handler incoming.event
                         |> Result.mapError (DecodeFailed incoming.name)
+
+        Just _ ->
+            Err (NoHandler incoming.path incoming.name)
 
 
 find : List Int -> Element msg -> Maybe (Element msg)
@@ -83,17 +83,17 @@ find path element =
 
         index :: rest ->
             case element of
-                Vdom.Element _ _ _ children ->
+                Vdom.Element _ _ _ _ children ->
                     if index < 0 then
                         Nothing
 
                     else
-                        children
+                        Vdom.flatten children
                             |> List.drop index
                             |> List.head
                             |> Maybe.andThen (find rest)
 
-                Vdom.Text _ ->
+                _ ->
                     Nothing
 
 

@@ -181,6 +181,40 @@ unit =
                     (Html.div [] [ Html.p [] [], Html.ul [] [ Html.li [] [], Html.li [] [ Element.text "old" ] ] ])
                     (Html.div [] [ Html.p [] [], Html.ul [] [ Html.li [] [], Html.li [] [ Element.text "new" ] ] ])
                     |> expectPatches [ SetText [ 1, 1, 0 ] "new" ]
+        , test "none leaves nothing behind" <|
+            \_ ->
+                Jorn.Patch.diff
+                    (Html.div [] [ Element.text "a" ])
+                    (Html.div [] [ Element.none, Element.text "a", Element.none ])
+                    |> expectPatches []
+        , test "a fragment's children are spliced into the parent's" <|
+            \_ ->
+                node (Html.ul [] [ Html.li [] [], Element.fragment [ Html.li [] [], Element.fragment [ Html.li [] [] ] ], Html.li [] [] ])
+                    |> Expect.equal (node (Html.ul [] [ Html.li [] [], Html.li [] [], Html.li [] [], Html.li [] [] ]))
+        , test "a fragment growing shifts the siblings after it" <|
+            \_ ->
+                Jorn.Patch.diff
+                    (Html.div [] [ Element.fragment [ Element.text "a" ], Element.text "z" ])
+                    (Html.div [] [ Element.fragment [ Element.text "a", Element.text "b" ], Element.text "z" ])
+                    |> expectPatches [ SetText [ 1 ] "b", Append [] [ node (Element.text "z") ] ]
+        , test "none at the root is an empty text node" <|
+            \_ ->
+                node Element.none
+                    |> Expect.equal (Vdom.NodeText "")
+        , test "a root fragment with one child is that child" <|
+            \_ ->
+                Jorn.Patch.diff (Html.div [] []) (Element.fragment [ Element.none, Html.div [] [] ])
+                    |> expectPatches []
+        , test "a root fragment with several children gets a layout-free wrapper" <|
+            \_ ->
+                node (Element.fragment [ Element.text "a", Element.text "b" ])
+                    |> Expect.equal (node (Element.element "jorn-fragment" [ Attr.attribute "style" "display: contents" ] [ Element.text "a", Element.text "b" ]))
+        , test "how an element closes never produces a patch" <|
+            \_ ->
+                Jorn.Patch.diff
+                    (Element.element "br" [] [])
+                    (Element.advanced { namespace = "", tag = "br", closing = Element.Void } [] [])
+                    |> expectPatches []
         , test "map produces no patches when only messages change" <|
             \_ ->
                 let
@@ -212,6 +246,15 @@ wire =
                             ++ """{"op":"append","path":[],"nodes":[{"tag":"span","namespace":"","attrs":{"class":"x"},"props":{},"events":{},"children":[]}]}"""
                             ++ "]"
                         )
+        , test "golden fragment encoding: fragments never reach the wire" <|
+            \_ ->
+                Jorn.Patch.diff
+                    (Html.div [] [ Element.fragment [ Element.text "a" ] ])
+                    (Html.div [] [ Element.none, Element.fragment [ Element.text "a", Element.fragment [ Html.span [] [] ] ] ])
+                    |> Jorn.Patch.encode
+                    |> Encode.encode 0
+                    |> Expect.equal
+                        """[{"op":"append","path":[],"nodes":[{"tag":"span","namespace":"","attrs":{},"props":{},"events":{},"children":[]}]}]"""
         , test "golden mount encoding" <|
             \_ ->
                 Html.button [ Attr.disabled True, Events.onClick () ] [ Element.text "go" ]
@@ -268,12 +311,13 @@ html depth =
         Fuzz.frequency
             [ ( 1, textNode )
             , ( 3
-              , Fuzz.map4 Vdom.Element
+              , Fuzz.map4 (\ns tag -> Vdom.Element ns tag Vdom.Normal)
                     (Fuzz.oneOfValues [ "", "", "svg-ns" ])
                     (Fuzz.oneOfValues [ "div", "span", "li" ])
                     (Fuzz.listOfLengthBetween 0 4 attribute)
                     (Fuzz.listOfLengthBetween 0 3 (html (depth - 1)))
               )
+            , ( 1, Fuzz.map Element.fragment (Fuzz.listOfLengthBetween 0 3 (html (depth - 1))) )
             ]
 
 

@@ -7,6 +7,8 @@
 - Event options are now attributes of the handler: `Event.preventDefault (onSubmit Submit)`. Options on one handler merge, and an option around anything that isn't a handler is ignored.
 - Event routing moved from `Jorn.Event` to `Jorn.Internal.Event`. It becomes public with the server component API and the runtime.
 - No change to the wire protocol. The golden tests in `tests/DiffTest.elm` still pass byte for byte.
+- `Element.none` renders nothing, and `Element.fragment` groups siblings without a wrapper element (#2). Both are resolved before diffing, so the wire protocol is unchanged.
+- `Element.advanced` builds an element with full control over its namespace, tag, and how its tags are written as HTML (`Normal`, `Void` or `SelfClosing`).
 
 ## v0.0 (2026-10-10)
 
