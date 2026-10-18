@@ -9,6 +9,7 @@
         "Jorn.Element",
         "Jorn.Element.Html",
         "Jorn.Element.Keyed",
+        "Jorn.Element.Svg",
         "Jorn.Event",
         "Jorn.Patch"
     ],

@@ -66,7 +66,7 @@ The document and its metadata.
 # Other namespaces
 
 `svg` and `math` start a subtree in the SVG and MathML namespaces. Build what
-goes inside with `Jorn.Element.namespaced`.
+goes inside with `Jorn.Element.Svg`, or `Jorn.Element.namespaced`.
 
 @docs svg, math
 
