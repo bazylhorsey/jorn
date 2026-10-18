@@ -65,7 +65,7 @@ view : Model -> Element Msg
 view model =
     Html.main_ []
         [ Html.h1 [] [ Element.text ("Hello, " ++ model.name) ]
-        , Html.input [ Attr.value model.name, Events.onInput Rename ] []
+        , Html.input [ Attr.value model.name, Events.onInput Rename ]
         , Html.button [ Events.onClick Decrement ] [ Element.text "-" ]
         , Html.span [] [ Element.text (String.fromInt model.count) ]
         , Html.button [ Events.onClick Increment ] [ Element.text "+" ]

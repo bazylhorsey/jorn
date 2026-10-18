@@ -10,6 +10,7 @@
 - `Element.none` renders nothing, and `Element.fragment` groups siblings without a wrapper element (#2). Both are resolved before diffing, so the wire protocol is unchanged.
 - `Element.advanced` builds an element with full control over its namespace, tag, and how its tags are written as HTML (`Normal`, `Void` or `SelfClosing`).
 - `Jorn.Element.Keyed`: children matched by key instead of position (#10). Reordering, inserting or removing items moves the existing DOM nodes, so focus and typed input stay with the right item. Three new patch ops, `insert`, `move` and `remove`, documented in PROTOCOL.md. Unkeyed views produce exactly the same patches as before.
+- `Jorn.Element.Html` has a function for every standard HTML element (#3), 114 in all. Void elements take only attributes, so `Html.input [ ... ] []` is now `Html.input [ ... ]`. `Html.svg` and `Html.math` start their own namespaces.
 
 ## v0.0 (2026-10-10)
 

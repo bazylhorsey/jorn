@@ -95,14 +95,14 @@ unit =
         , test "value is an attribute" <|
             \_ ->
                 Jorn.Patch.diff
-                    (Html.input [ Attr.value "a" ] [])
-                    (Html.input [ Attr.value "b" ] [])
+                    (Html.input [ Attr.value "a" ])
+                    (Html.input [ Attr.value "b" ])
                     |> expectPatches [ SetAttribute [] "value" "b" ]
         , test "boolean attributes switch between attribute and false property" <|
             \_ ->
                 Jorn.Patch.diff
-                    (Html.input [ Attr.checked True ] [])
-                    (Html.input [ Attr.checked False ] [])
+                    (Html.input [ Attr.checked True ])
+                    (Html.input [ Attr.checked False ])
                     |> expectPatches
                         [ RemoveAttribute [] "checked"
                         , SetProperty [] "checked" (Encode.bool False)
@@ -119,7 +119,7 @@ unit =
                     |> expectPatches []
         , test "removed property" <|
             \_ ->
-                Jorn.Patch.diff (Html.input [ Attr.checked False ] []) (Html.input [] [])
+                Jorn.Patch.diff (Html.input [ Attr.checked False ]) (Html.input [])
                     |> expectPatches [ RemoveProperty [] "checked" ]
         , test "event added and removed" <|
             \_ ->
@@ -340,8 +340,8 @@ wire =
         [ test "golden patch encoding" <|
             \_ ->
                 Jorn.Patch.diff
-                    (Html.div [ Attr.id "root" ] [ Element.text "a", Html.input [] [] ])
-                    (Html.div [ Attr.id "root" ] [ Element.text "b", Html.input [ Events.onInput identity ] [], Html.span [ Attr.class "x" ] [] ])
+                    (Html.div [ Attr.id "root" ] [ Element.text "a", Html.input [] ])
+                    (Html.div [ Attr.id "root" ] [ Element.text "b", Html.input [ Events.onInput identity ], Html.span [ Attr.class "x" ] [] ])
                     |> Jorn.Patch.encode
                     |> Encode.encode 0
                     |> Expect.equal

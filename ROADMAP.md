@@ -11,7 +11,7 @@ Statuses: **done** is available today. **partial** is available with a stated di
 | Elements with any tag (`element`) and namespaced elements (`namespaced`) | done | SVG and MathML work today through `namespaced`. |
 | Text nodes | done | |
 | `Element.map` | partial | Eager: walks the subtree. A lazy map needs kernel code, which a pure package can't use. |
-| HTML element helpers | partial | 20 of about 115 standard elements have helpers (`div`, `span`, `p`, `h1` to `h3`, `a`, `button`, `input`, `label`, `form`, `ul`, `ol`, `li`, `section`, `main_`, `header`, `footer`, `nav`). The rest work through `element`. |
+| HTML element helpers | done | All standard elements in `Jorn.Element.Html`. Void elements (`br`, `img`, `input`, ...) take only attributes. |
 | SVG element helpers | todo | |
 | MathML element helpers | todo | |
 | `none`, `fragment` and `advanced` | done | Fragments are spliced into their parent before diffing, so they never appear on the wire. |

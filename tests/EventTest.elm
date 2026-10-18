@@ -22,7 +22,7 @@ view =
     Html.div []
         [ Element.text "header"
         , Html.form []
-            [ Html.input [ Events.onInput Typed ] []
+            [ Html.input [ Events.onInput Typed ]
             , Html.button [ Events.onClick Clicked ] [ Element.text "go" ]
             ]
         , Element.map Child (Html.button [ Events.onClick 7 ] [])
