@@ -86,6 +86,46 @@ unit =
                     (Html.div [ Attr.class "a" ] [])
                     (Html.div [ Attr.class "a", Attr.classes [ ( "b", True ), ( "c", False ) ] ] [])
                     |> expectPatches [ SetAttribute [] "class" "a b" ]
+        , test "none is ignored" <|
+            \_ ->
+                Jorn.Patch.diff (Html.div [ Attr.id "a" ] []) (Html.div [ Attr.none, Attr.id "a", Attr.none ] [])
+                    |> expectPatches []
+        , test "style declarations accumulate into one attribute" <|
+            \_ ->
+                node (Html.div [ Attr.style "color" "red", Attr.styles [ ( "top", "0" ), ( "left", "1px" ) ], Attr.style "color" "blue" ] [])
+                    |> Expect.equal (node (Html.div [ Attr.attribute "style" "color: red; top: 0; left: 1px; color: blue" ] []))
+        , test "global attributes encode as the HTML spells them" <|
+            \_ ->
+                node
+                    (Html.div
+                        [ Attr.data "user-id" "42"
+                        , Attr.tabindex -1
+                        , Attr.draggable True
+                        , Attr.spellcheck False
+                        , Attr.translate False
+                        , Attr.autocorrect True
+                        , Attr.hidden True
+                        ]
+                        []
+                    )
+                    |> Expect.equal
+                        (node
+                            (Html.div
+                                [ Attr.attribute "data-user-id" "42"
+                                , Attr.attribute "tabindex" "-1"
+                                , Attr.attribute "draggable" "true"
+                                , Attr.attribute "spellcheck" "false"
+                                , Attr.attribute "translate" "no"
+                                , Attr.attribute "autocorrect" "on"
+                                , Attr.attribute "hidden" ""
+                                ]
+                                []
+                            )
+                        )
+        , test "boolean global attributes reset live state when false" <|
+            \_ ->
+                Jorn.Patch.diff (Html.div [ Attr.hidden True ] []) (Html.div [ Attr.hidden False ] [])
+                    |> expectPatches [ RemoveAttribute [] "hidden", SetProperty [] "hidden" (Encode.bool False) ]
         , test "property change" <|
             \_ ->
                 Jorn.Patch.diff
@@ -466,7 +506,9 @@ options =
 attribute : Fuzzer (Attr.Attribute String)
 attribute =
     Fuzz.oneOf
-        [ Fuzz.map2 Attr.attribute (Fuzz.oneOfValues [ "id", "title", "class" ]) (Fuzz.oneOfValues [ "", "x", "y" ])
+        [ Fuzz.constant Attr.none
+        , Fuzz.map2 Attr.style (Fuzz.oneOfValues [ "color", "top" ]) (Fuzz.oneOfValues [ "", "red" ])
+        , Fuzz.map2 Attr.attribute (Fuzz.oneOfValues [ "id", "title", "class" ]) (Fuzz.oneOfValues [ "", "x", "y" ])
         , Fuzz.map Attr.value (Fuzz.oneOfValues [ "", "v" ])
         , Fuzz.map Attr.checked Fuzz.bool
         , Fuzz.map (\items -> Attr.property "config" (Encode.list Encode.int items)) (Fuzz.listOfLengthBetween 0 2 (Fuzz.intRange 0 2))

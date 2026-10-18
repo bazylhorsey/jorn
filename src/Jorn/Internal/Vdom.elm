@@ -55,6 +55,7 @@ type Attribute msg
     | Prop String Value
     | On String (Decoder msg)
     | Options EventOptions (Attribute msg)
+    | NoAttribute
 
 
 {-| Event options are static on purpose. A server component has to tell the
@@ -85,7 +86,8 @@ defaultOptions =
 
 
 {-| An element's attribute list folded into lookup tables. Later entries win,
-except `class`, which accumulates like it does in elm/html.
+except `class` and `style`, which accumulate: classes joined by spaces, like
+elm/html, and style declarations joined by semicolons.
 -}
 type alias Facts msg =
     { attrs : Dict String String
@@ -107,7 +109,10 @@ addFact attribute acc =
     in
     case bare of
         Attr "class" value ->
-            { acc | attrs = Dict.update "class" (mergeClass value) acc.attrs }
+            { acc | attrs = Dict.update "class" (accumulate " " value) acc.attrs }
+
+        Attr "style" value ->
+            { acc | attrs = Dict.update "style" (accumulate "; " value) acc.attrs }
 
         Attr name value ->
             { acc | attrs = Dict.insert name value acc.attrs }
@@ -119,6 +124,9 @@ addFact attribute acc =
             { acc | events = Dict.insert name ( options, decoder ) acc.events }
 
         Options _ _ ->
+            acc
+
+        NoAttribute ->
             acc
 
 
@@ -162,8 +170,8 @@ addPaths paths existing =
         paths
 
 
-mergeClass : String -> Maybe String -> Maybe String
-mergeClass value existing =
+accumulate : String -> String -> Maybe String -> Maybe String
+accumulate separator value existing =
     case existing of
         Nothing ->
             Just value
@@ -176,7 +184,7 @@ mergeClass value existing =
                 Just value
 
             else
-                Just (previous ++ " " ++ value)
+                Just (previous ++ separator ++ value)
 
 
 
@@ -433,3 +441,6 @@ mapAttribute f attribute =
 
         Options options wrapped ->
             Options options (mapAttribute f wrapped)
+
+        NoAttribute ->
+            NoAttribute
