@@ -28,13 +28,30 @@ import { stream } from "./jorn.js";
 
 const app = stream(document.getElementById("app"), "/app", {
   flags: { theme: "dark" },                           // sent to the server, which decides whether to use them
+  csrfToken,                                          // optional, for the server's authorize check
   effects: { copy: (text) => navigator.clipboard.writeText(text) }, // Effect.client still runs here
 });
 
 app.close(); // disconnect and empty the container
 ```
 
-A relative address is resolved against the page, and `http` becomes `ws`. The page only applies patches and sends events back: `update`, `view` and commands run on the server, and focus, scrolling and `Effect.client` run here.
+A relative address is resolved against the page, and `http` becomes `ws`. `csrfToken` goes to the server's `authorize` check. The page only applies patches and sends events back: `update`, `view` and commands run on the server, and focus, scrolling and `Effect.client` run here.
+
+## Server components as elements
+
+`defineServerComponent` defines `<jorn-server-component>`, the element `Jorn.ServerComponent.element` makes. Each one streams the component at its `route` into itself while it's in the document:
+
+```html
+<jorn-server-component route="/chat" flags='{"room":"elm"}'></jorn-server-component>
+
+<script type="module">
+  import { defineServerComponent } from "./jorn.js";
+
+  defineServerComponent({ effects: { copy: (text) => navigator.clipboard.writeText(text) } });
+</script>
+```
+
+It disconnects when it's removed, and moving it, for example in a keyed list, keeps the connection. Changing its `route`, `flags` or `csrf-token` reconnects. Events from `Effect.event` bubble out of it, so the page or an enclosing Jorn app can listen for them.
 
 ## Hosting a program yourself
 
@@ -63,7 +80,8 @@ jorn.patch(patches); // after every update, with the output of Jorn.Patch.encode
 | | |
 |---|---|
 | `start(program, container, { flags, effects, ports })` | Run a compiled Jorn program in `container`. Returns `{ shutdown() }`. |
-| `stream(container, url, { flags, effects })` | Show a program running on a server in `container`, over a websocket. Returns `{ close() }`. |
+| `stream(container, url, { flags, csrfToken, effects })` | Show a program running on a server in `container`, over a websocket. Returns `{ close() }`. |
+| `defineServerComponent({ effects })` | Define `<jorn-server-component>`. Only the first call counts. |
 | `connect(container, { send, raw, effects })` | Take over `container`. Its only child is the root of your view from here on. `effects` maps names to the functions `Effect.client` can call. |
 | `.mount(node)` | Render a whole tree, replacing whatever was there. |
 | `.patch(patches)` | Apply patches strictly in order. Throws on a patch that doesn't fit the page, which means the page and the server have drifted apart. |

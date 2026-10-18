@@ -5,8 +5,8 @@ module Jorn.Internal.Event exposing
 
 {-| Route an event reported by the client back to the handler that produced it.
 
-Internal for now. Routing becomes part of the server component API in #20 and
-the runtime in #16, until then it lives here.
+The runtime routes with this, and `Jorn.ServerComponent.decodeEvent` is the
+public face of it.
 
 
 # Incoming events

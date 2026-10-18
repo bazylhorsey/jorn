@@ -30,6 +30,12 @@ import { stream } from "./jorn.js";
 stream(document.getElementById("app"), "/app");
 ```
 
+Or put it anywhere in a page, or in a Jorn app's view, as an element, with `Jorn.ServerComponent.element` and `defineServerComponent` from `client/jorn.js`:
+
+```html
+<jorn-server-component route="/app"></jorn-server-component>
+```
+
 Install the one dependency, [ws](https://github.com/websockets/ws), with `npm install` in this folder. It needs Node 22 or newer.
 
 ## What runs where
@@ -45,13 +51,23 @@ Install the one dependency, [ws](https://github.com/websockets/ws), with `npm in
 
 Browsers send cookies with a websocket from any site, so `attach` only accepts pages from the server's own origin. If your pages are served from somewhere else, list them in `origins: ["https://example.com"]`. Clients that aren't browsers send no origin and are let in, since they can't carry a visitor's cookies.
 
+For more than that, give `attach` an `authorize` function. It gets the request and the CSRF token the page sent (from `stream`'s `csrfToken` or the element's `csrf-token`), runs before `flags`, and closes the socket if it returns false:
+
+```js
+attach(server, {
+  path: "/app",
+  program: Elm.Main,
+  authorize: ({ request, csrfToken }) => csrfToken === tokenFor(request),
+});
+```
+
 Messages over 1 MiB close the socket. Change that with `maxPayload`.
 
 ## API
 
 | | |
 |---|---|
-| `attach(server, { program, path, flags, origins, ports, maxPayload, log })` | Serve `program` to pages that connect to `path` on an HTTP server. Leaves other paths alone. Returns `{ sessions, close() }`. |
+| `attach(server, { program, path, flags, authorize, origins, ports, maxPayload, log })` | Serve `program` to pages that connect to `path` on an HTTP server. Leaves other paths alone. Returns `{ sessions, close() }`. |
 | `session(program, { send, flags, ports, log })` | Start one instance of `program` with no transport. Hand the page's messages to `.receive(message)` and call `.close()` when it goes away. For hosts that move the messages themselves. |
 
 If your program's ports aren't called `toJorn` and `fromJorn`, pass `ports: { toJorn: "...", fromJorn: "..." }`.

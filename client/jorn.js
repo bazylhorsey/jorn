@@ -19,7 +19,8 @@
 //
 // For an app built with Jorn.simple or Jorn.application, `start` does all of
 // that for you when the program runs in the page, and `stream` does it when
-// the program runs on a server (server/jorn.js).
+// the program runs on a server (server/jorn.js). `defineServerComponent`
+// does it for every <jorn-server-component> in the page.
 
 const LIVE = {
   value: new Set(["input", "textarea", "select"]),
@@ -452,9 +453,11 @@ export function start(program, container, { flags, effects = {}, ports = {} } = 
  *
  * @param {Element} container
  * @param {string | URL} url
- * @param {{ flags?: unknown, effects?: Record<string, Function> }} options
+ * `csrfToken` goes to the server with `flags`, for its `authorize` check.
+ *
+ * @param {{ flags?: unknown, csrfToken?: string, effects?: Record<string, Function> }} options
  */
-export function stream(container, url, { flags, effects = {} } = {}) {
+export function stream(container, url, { flags, csrfToken, effects = {} } = {}) {
   const view = container?.ownerDocument?.defaultView;
   const Socket = view?.WebSocket ?? globalThis.WebSocket;
   if (typeof Socket !== "function") {
@@ -471,7 +474,7 @@ export function stream(container, url, { flags, effects = {} } = {}) {
   };
   const jorn = connect(container, { send: (event) => post({ event }), effects });
 
-  socket.addEventListener("open", () => post({ join: { protocol: 0, flags } }));
+  socket.addEventListener("open", () => post({ join: { protocol: 0, flags, csrfToken } }));
   socket.addEventListener("message", ({ data }) => {
     if (!running) return;
     let message;
@@ -496,6 +499,79 @@ export function stream(container, url, { flags, effects = {} } = {}) {
       jorn.unmount();
     },
   };
+}
+
+/**
+ * Define `<jorn-server-component>`, the element `Jorn.ServerComponent.element`
+ * makes, so that a page can hold server components:
+ *
+ *   <jorn-server-component route="/chat"></jorn-server-component>
+ *
+ * Each one streams the component at its `route` into itself while it's in
+ * the document, sending its `flags` attribute (JSON) and `csrf-token`
+ * attribute when it connects. Moving it keeps the connection. `effects` are
+ * the functions every component's `Effect.client` can call.
+ *
+ * Changing `route`, `flags` or `csrf-token` reconnects, which starts a new
+ * session. Only the first call defines the element, so call it before
+ * anything else does if you have effects to give it.
+ *
+ * @param {{ effects?: Record<string, Function>, window?: Window }} options
+ */
+export function defineServerComponent({ effects = {}, window = globalThis } = {}) {
+  const registry = window.customElements;
+  if (!registry) throw new TypeError("Jorn: defineServerComponent needs a browser with custom elements");
+  if (registry.get("jorn-server-component")) return;
+
+  registry.define(
+    "jorn-server-component",
+    class extends window.HTMLElement {
+      static observedAttributes = ["route", "flags", "csrf-token"];
+      #app = null;
+
+      connectedCallback() {
+        if (!this.#app) this.#open();
+      }
+
+      // Moving an element without moveBefore removes it and adds it back
+      // straight away, so only close if it's still gone after this task.
+      disconnectedCallback() {
+        queueMicrotask(() => {
+          if (!this.isConnected) this.#close();
+        });
+      }
+
+      attributeChangedCallback(name, before, after) {
+        if (before !== after && this.#app) {
+          this.#close();
+          this.#open();
+        }
+      }
+
+      #open() {
+        const route = this.getAttribute("route");
+        if (route === null) {
+          console.warn("Jorn: a <jorn-server-component> needs a route");
+          return;
+        }
+        let flags;
+        const json = this.getAttribute("flags");
+        if (json !== null) {
+          try {
+            flags = JSON.parse(json);
+          } catch {
+            console.warn("Jorn: a <jorn-server-component>'s flags aren't JSON");
+          }
+        }
+        this.#app = stream(this, route, { flags, csrfToken: this.getAttribute("csrf-token") ?? undefined, effects });
+      }
+
+      #close() {
+        this.#app?.close();
+        this.#app = null;
+      }
+    },
+  );
 }
 
 // What both modes do with a message from the program: mount it, or apply
