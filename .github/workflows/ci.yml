@@ -33,6 +33,11 @@ jobs:
       - name: Browser patcher, unit and randomized tests
         run: node run.mjs 5000
         working-directory: client/test
+      - run: $GITHUB_WORKSPACE/node_modules/.bin/elm make src/RuntimeSpec.elm --output=build/runtime.js
+        working-directory: client/test/elm
+      - name: App runtime
+        run: node runtime.mjs
+        working-directory: client/test
 
   elm-0-19-2:
     runs-on: ubuntu-latest

@@ -18,11 +18,12 @@ npx elm-test
 npx elm make --docs=docs.json
 ```
 
-CI runs the same three, plus the browser patcher's tests and the counter example. If you touch `client/jorn.js`, run its tests too:
+CI runs the same three, plus the browser patcher's and runtime's tests and the counter example. If you touch `client/jorn.js` or `src/Jorn.elm`, run those tests too:
 
 ```
 (cd client/test/elm && ../../../node_modules/.bin/elm make src/ClientSpec.elm --optimize --output=build/spec.js)
-(cd client/test && npm install && node run.mjs)
+(cd client/test/elm && ../../../node_modules/.bin/elm make src/RuntimeSpec.elm --output=build/runtime.js)
+(cd client/test && npm install && node run.mjs && node runtime.mjs)
 ```
 
 ## How the code is laid out
@@ -32,7 +33,7 @@ CI runs the same three, plus the browser patcher's tests and the counter example
 - `tests/DiffTest.elm` has golden tests that pin the wire format byte for byte. If you change what goes over the wire, update [PROTOCOL.md](PROTOCOL.md) in the same pull request.
 - `tests/Reference.elm` is an executable spec of the browser patcher: it applies patches to a tree in Elm, and the fuzz tests check that applying `diff a b` to `a` always gives `b`.
 - `examples/` holds runnable examples. Each is an Elm application that pulls in `../../src`.
-- `client/jorn.js` is the browser patcher. `client/test/run.mjs` checks it in jsdom: unit tests for live form state and events, then thousands of random view sequences generated in Elm, checking the DOM after every patch and routing every event back through `Jorn.Internal.Event`.
+- `client/jorn.js` is the browser patcher. `client/test/run.mjs` checks it in jsdom: unit tests for live form state and events, then thousands of random view sequences generated in Elm, checking the DOM after every patch and routing every event back through `Jorn.Internal.Event`. `client/test/runtime.mjs` runs a small app through `Jorn.application` and `start`, checking batching and every kind of effect.
 
 ## Style
 

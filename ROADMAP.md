@@ -49,13 +49,13 @@ Statuses: **done** is available today. **partial** is available with a stated di
 |---|---|---|
 | Mount (encode a whole tree) | done | `Jorn.Patch.encodeHtml` |
 | Diff and patch encoding | done | `Jorn.Patch`, specified in [PROTOCOL.md](PROTOCOL.md) |
-| Event decoding and routing | done | `Jorn.Internal.Event`, public once the runtime lands |
+| Event decoding and routing | done | Built into the runtime. Public with the server runtime, for hosts that route events themselves. |
 
 ## Runtime
 
 | Feature | Status | Notes |
 |---|---|---|
-| App runtime (`init`, `update`, `view` programs) | todo | |
+| App runtime (`init`, `update`, `view` programs) | done | `Jorn.simple` and `Jorn.application`, started in the page with `start` from `client/jorn.js`. One diff per animation frame, however many messages arrive. |
 | Effects (`Effect.none`, `batch`, `map`, ...) | done | `Jorn.Effect`: Elm commands, focus and scrolling, paint timing, custom events and named client effects. Contexts come with #28. |
 | Browser patcher (small JavaScript) | done | [client/jorn.js](client/jorn.js). Checked against [tests/Reference.elm](tests/Reference.elm)'s semantics with randomized diffs in `client/test/`. |
 | Server runtime over a websocket (Node, Bun, Deno) | todo | |

@@ -16,6 +16,9 @@
 //   });
 //   jorn.mount(tree);      // once
 //   jorn.patch(patches);   // after every update, in order
+//
+// For an app built with Jorn.simple or Jorn.application running in the page,
+// `start` does all of that for you.
 
 const LIVE = {
   value: new Set(["input", "textarea", "select"]),
@@ -346,6 +349,68 @@ export function connect(container, { send, raw = false, effects = {} } = {}) {
     /** Empty the container and stop reporting its events. */
     unmount() {
       container.replaceChildren();
+    },
+  };
+}
+
+/**
+ * Start a compiled Jorn program (`Jorn.simple` or `Jorn.application`) in
+ * `container`, in client mode: the program runs in this page.
+ *
+ *   import { start } from "./jorn.js";
+ *
+ *   const app = start(Elm.Main, document.getElementById("app"), {
+ *     flags,                                   // whatever your init expects
+ *     effects: { copy: (text) => ... },        // for Effect.client
+ *   });
+ *   app.shutdown();                            // stop and empty the container
+ *
+ * The program has to declare ports called `toJorn` and `fromJorn`. If yours
+ * are named differently, pass `ports: { toJorn: "...", fromJorn: "..." }`.
+ *
+ * @param {{ init: (options: { flags?: unknown }) => { ports: Record<string, any> } }} program
+ * @param {Element} container
+ * @param {{ flags?: unknown, effects?: Record<string, Function>, ports?: { toJorn?: string, fromJorn?: string } }} options
+ */
+export function start(program, container, { flags, effects = {}, ports = {} } = {}) {
+  const { toJorn = "toJorn", fromJorn = "fromJorn" } = ports;
+  const app = program.init(flags === undefined ? {} : { flags });
+  const out = app.ports?.[toJorn];
+  const into = app.ports?.[fromJorn];
+  if (!out?.subscribe || !into?.send) {
+    throw new TypeError(`Jorn: start needs a program with ports called ${toJorn} and ${fromJorn}`);
+  }
+
+  const jorn = connect(container, { send: (event) => into.send({ event }), raw: true, effects });
+  const view = container.ownerDocument.defaultView;
+  // One render per animation frame, however many messages arrive before it.
+  const nextFrame =
+    typeof view?.requestAnimationFrame === "function"
+      ? (callback) => view.requestAnimationFrame(callback)
+      : (callback) => setTimeout(callback, 0);
+  let running = true;
+
+  function receive(message) {
+    if (!running) return;
+    if (message.mount) jorn.mount(message.mount);
+    if (message.patches) {
+      jorn.patch(message.patches);
+      jorn.run(message.instructions ?? []);
+      if (message.painted) into.send({ painted: true });
+    }
+    if (message.frame) nextFrame(() => running && into.send({ frame: true }));
+    if (message.error) console.warn(`Jorn: ${message.error}`);
+  }
+  out.subscribe(receive);
+
+  return {
+    /** Stop the program and empty the container. */
+    shutdown() {
+      if (!running) return;
+      running = false;
+      out.unsubscribe(receive);
+      into.send({ shutdown: true });
+      jorn.unmount();
     },
   };
 }

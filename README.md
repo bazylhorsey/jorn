@@ -28,6 +28,7 @@ patches =
 | Module | What it does |
 |---|---|
 | `Jorn.Element`, `Jorn.Element.Html`, `Jorn.Attribute`, `Jorn.Event` | Build views. Ordinary Elm data, like `elm/html`. |
+| `Jorn`, `Jorn.Effect` | Run an app in the page: `init`, `update`, `view`, and effects. |
 | `Jorn.Patch` | Diff two views and encode the patches as JSON. |
 | [`client/jorn.js`](client/jorn.js) | The browser side: apply patches to the DOM and report events back. No dependencies. |
 
