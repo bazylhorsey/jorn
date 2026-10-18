@@ -281,6 +281,13 @@ unit("selected follows the model, defaultSelected only starts it", () => {
   check(second.value === "a" && !second.options[1].hasAttribute("selected"), "the user's choice stays", { got: second.value });
 });
 
+unit("keyboard events send their key in server mode", () => {
+  const { container, sent, jorn } = setup();
+  jorn.mount(el("input", { events: { keydown: opts({ include: ["key"] }) } }));
+  container.firstChild.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter" }));
+  check(JSON.stringify(sent[0]?.event) === '{"key":"Enter"}', "key is sent", { sent });
+});
+
 unit("detached elements stay quiet", () => {
   const { container, sent, jorn } = setup();
   jorn.mount(el("div", {}, [el("button", { events: { click: opts() } })]));

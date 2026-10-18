@@ -241,6 +241,19 @@ unit =
                     (Html.div [] [])
                     (Html.div [ Events.preventDefault (Attr.id "x") ] [])
                     |> expectPatches [ SetAttribute [] "id" "x" ]
+        , test "event helpers ask for exactly the fields they decode" <|
+            \_ ->
+                node (Html.input [ Events.onKeydown identity, Events.onChange identity, Events.onFocus "f", Events.onMouseEnter "e" ])
+                    |> Expect.equal
+                        (node
+                            (Html.input
+                                [ Events.include [ "key" ] (Events.on "keydown" (Decode.succeed ""))
+                                , Events.include [ "target.value" ] (Events.on "change" (Decode.succeed ""))
+                                , Events.on "focus" (Decode.succeed "")
+                                , Events.on "mouseenter" (Decode.succeed "")
+                                ]
+                            )
+                        )
         , test "children appended" <|
             \_ ->
                 Jorn.Patch.diff

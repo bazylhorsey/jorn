@@ -39,7 +39,7 @@ Statuses: **done** is available today. **partial** is available with a stated di
 | `on` and `custom` | done | Options are static, so the client can decide `preventDefault` instantly without a round trip. |
 | `onClick`, `onInput`, `onCheck`, `onSubmit` | done | |
 | `preventDefault` and `stopPropagation` | done | Static, through `custom`. Deciding per event is todo. |
-| Mouse, keyboard, focus, blur, and change helpers | todo | All work today through `on`. |
+| Mouse, keyboard, focus, blur, and change helpers | done | Keyboard helpers include `key`, so server components get it. |
 | Debounce and throttle | todo | |
 | Emitting custom events from a component | todo | |
 
