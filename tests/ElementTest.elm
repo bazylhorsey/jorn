@@ -3,14 +3,29 @@ module ElementTest exposing (suite)
 import Expect
 import Jorn.Element as Element
 import Jorn.Element.Html as Html
+import Jorn.Element.Svg as Svg
 import Jorn.Internal.Vdom as Vdom
 import Test exposing (Test, describe, test)
 
 
 suite : Test
 suite =
-    describe "Jorn.Element.Html"
-        [ test "an element helper uses its tag name" <|
+    describe "element helpers"
+        [ test "SVG elements are in the SVG namespace" <|
+            \_ ->
+                [ Svg.svg [] [], Svg.circle [] [], Svg.feGaussianBlur [] [], Svg.text [] [] ]
+                    |> List.map shape
+                    |> Expect.equal
+                        (List.map (\tag -> Just ( Svg.namespace, tag, Vdom.Normal )) [ "svg", "circle", "feGaussianBlur", "text" ])
+        , test "SVG names that aren't valid Elm map to their real tags" <|
+            \_ ->
+                [ Svg.use_ [] [], Svg.missingGlyph [] [] ]
+                    |> List.map shape
+                    |> Expect.equal [ Just ( Svg.namespace, "use", Vdom.Normal ), Just ( Svg.namespace, "missing-glyph", Vdom.Normal ) ]
+        , test "Html.svg and Svg.svg agree" <|
+            \_ ->
+                shape (Html.svg [] []) |> Expect.equal (shape (Svg.svg [] []))
+        , test "an element helper uses its tag name" <|
             \_ ->
                 Html.blockquote [] []
                     |> shape
