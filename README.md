@@ -4,7 +4,7 @@
 
 Jorn is an attempt to build the web framework that doesn't make you choose. Today every serious option wins on one axis by giving up another. Jorn's bet is that with the right language, you can have all of them at once.
 
-> **Status: v0.1.** You can build browser apps with Jorn: every HTML and SVG element, attributes and ARIA, keyed lists, fragments, effects, and an app runtime, on a pure Elm virtual DOM with a tested wire protocol and patcher. Server components are next. The rest of this page describes where it's going. See the [roadmap](ROADMAP.md).
+> **Status: v0.1, running a landing page in production.** [bazylhorsey.github.io](https://bazylhorsey.github.io) is built with Jorn. You can build browser apps with Jorn: every HTML and SVG element, attributes and ARIA, keyed lists, fragments, effects, and an app runtime, on a pure Elm virtual DOM with a tested wire protocol and patcher. Server components are next. The rest of this page describes where it's going. See the [roadmap](ROADMAP.md).
 
 ## What v0.1 gives you
 
