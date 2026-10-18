@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## v0.1 (2026-10-18)
+
+Client apps: the full HTML and SVG vocabulary, attributes and ARIA, keyed lists, fragments, effects, and an app runtime.
 
 - Public modules reorganized around what things are instead of mirroring `elm/html` (#1). `Jorn.Html` is now `Jorn.Element`, its element helpers are in `Jorn.Element.Html`, `Jorn.Html.Attributes` is `Jorn.Attribute`, and `Jorn.Html.Events` is `Jorn.Event`.
 - Renames: `node` to `element`, `nodeNS` to `namespaced`, the `Html` type to `Element`, and `classList` to `classes`.
