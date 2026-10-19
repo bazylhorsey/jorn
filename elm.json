@@ -10,6 +10,7 @@
         "Jorn.Element",
         "Jorn.Element.Html",
         "Jorn.Element.Keyed",
+        "Jorn.Element.MathMl",
         "Jorn.Element.Svg",
         "Jorn.Effect",
         "Jorn.Event",

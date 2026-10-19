@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- `Jorn.Element.MathMl` has a function for every MathML Core element, in the MathML namespace (#14).
+
 ## v0.2 (2026-10-19)
 
 Server components: run an app on a Node server and stream it to the page over a websocket, with reconnects, limits, debounced and throttled events, and elm/http on the server.
