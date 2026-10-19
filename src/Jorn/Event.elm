@@ -1,12 +1,12 @@
 module Jorn.Event exposing
     ( on, custom, Options
-    , onClick, onInput, onCheck, onSubmit
+    , onClick, onInput, onCheck, onSubmit, onSubmitFields
     , onMouseDown, onMouseUp, onMouseEnter, onMouseLeave, onMouseOver, onMouseOut
     , onKeydown, onKeyup, onKeypress
     , onChange, onFocus, onBlur
     , preventDefault, stopPropagation, include
     , debounce, throttle
-    , targetValue, targetChecked, key
+    , targetValue, targetChecked, key, formFields
     )
 
 {-| Event handlers.
@@ -34,7 +34,7 @@ option only reaches the handler it wraps.
 
 # Common events
 
-@docs onClick, onInput, onCheck, onSubmit
+@docs onClick, onInput, onCheck, onSubmit, onSubmitFields
 
 
 # Mouse
@@ -77,7 +77,7 @@ back: the last event is sent once the user pauses, and at least once per
 
 # Decoders
 
-@docs targetValue, targetChecked, key
+@docs targetValue, targetChecked, key, formFields
 
 -}
 
@@ -131,6 +131,30 @@ onCheck tagger =
 onSubmit : msg -> Attribute msg
 onSubmit msg =
     custom "submit" preventDefault (Decode.succeed msg)
+
+
+{-| Handle a form's submission with its fields, so you don't need an
+`onInput` on every field:
+
+    Html.form [ Event.onSubmitFields SignUp ]
+        [ Html.input [ Attribute.name "email" ]
+        , Html.button [ Attribute.name "plan", Attribute.value "pro" ] [ Element.text "Go pro" ]
+        ]
+
+`SignUp` gets the fields as `( name, value )` pairs, in the order the
+browser would submit them: `[ ( "email", "..." ), ( "plan", "pro" ) ]`. Like
+a real submission, it leaves out fields without a name, disabled fields and
+unchecked boxes, and includes the button that submitted the form. File inputs
+are left out, since their contents can't be sent as text.
+
+Prevents the browser's default form submission. The page collects the fields,
+so this works the same for a server component, which can't read the form
+itself.
+
+-}
+onSubmitFields : (List ( String, String ) -> msg) -> Attribute msg
+onSubmitFields tagger =
+    custom "submit" (preventDefault << include [ "formFields" ]) (Decode.map tagger formFields)
 
 
 {-| -}
@@ -287,3 +311,20 @@ targetChecked =
 key : Decoder String
 key =
     Decode.field "key" Decode.string
+
+
+{-| The fields of the form an event came from, as `( name, value )` pairs,
+the way `onSubmitFields` gets them. The page only collects them for a handler
+that includes `"formFields"`:
+
+    Event.custom "change"
+        (Event.include [ "formFields" ])
+        (Decode.map FormChanged Event.formFields)
+
+The form is the event's target, or the form the target belongs to.
+
+-}
+formFields : Decoder (List ( String, String ))
+formFields =
+    Decode.field "formFields"
+        (Decode.list (Decode.map2 Tuple.pair (Decode.index 0 Decode.string) (Decode.index 1 Decode.string)))

@@ -10,6 +10,7 @@ exercise every diff branch.
 
 import Dict exposing (Dict)
 import Jorn.Attribute as Attr
+import Jorn.Element
 import Jorn.Event as Events
 import Jorn.Internal.Event as Routing
 import Jorn.Internal.Vdom as Vdom exposing (Element(..))
@@ -65,6 +66,7 @@ update msg model =
                             [ ( "a", Jorn.Patch.encodeHtml a )
                             , ( "b", Jorn.Patch.encodeHtml b )
                             , ( "c", Jorn.Patch.encodeHtml c )
+                            , ( "html", Encode.list (Encode.string << Jorn.Element.toString) [ a, b, c ] )
                             , ( "ab", Jorn.Patch.encode (Jorn.Patch.diff a b) )
                             , ( "bc", Jorn.Patch.encode (Jorn.Patch.diff b c) )
                             , ( "keepAB", encodeSurvivors (survivors a b) )
@@ -245,7 +247,7 @@ tree : Int -> Generator (Vdom.Element ())
 tree depth =
     let
         text =
-            Random.map Text (Random.uniform "" [ "a", "b" ])
+            Random.map Text (Random.uniform "" [ "a", "b", "<&\u{00A0}>" ])
     in
     if depth <= 0 then
         text
@@ -304,7 +306,16 @@ element depth =
     Random.uniform ( "", "div" ) [ ( "", "span" ), ( "", "li" ), ( "", "button" ), ( "", "input" ), ( "http://www.w3.org/2000/svg", "g" ) ]
         |> Random.andThen
             (\( ns, tag ) ->
-                Random.map2 (Element ns tag Vdom.Normal)
+                Random.map2
+                    (Element ns
+                        tag
+                        (if tag == "input" then
+                            Vdom.Void
+
+                         else
+                            Vdom.Normal
+                        )
+                    )
                     (Random.int 0 4 |> Random.andThen (\n -> Random.list n attribute) |> Random.map dedupe)
                     (if tag == "input" then
                         Random.constant []
@@ -318,7 +329,7 @@ element depth =
 attribute : Generator (Vdom.Attribute ())
 attribute =
     Random.uniform (Random.map Attr.class (Random.uniform "" [ "x", "y" ]))
-        [ Random.map (Attr.attribute "title") (Random.uniform "" [ "x", "y" ])
+        [ Random.map (Attr.attribute "title") (Random.uniform "" [ "x", "y", "\"&\u{00A0}" ])
         , Random.constant Attr.none
         , Random.map2 Attr.style (Random.uniform "color" [ "top" ]) (Random.uniform "red" [ "0" ])
         , Random.map Attr.value (Random.uniform "" [ "v", "w" ])

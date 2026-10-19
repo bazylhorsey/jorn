@@ -8,6 +8,8 @@
 //    Then fire every event on every element and check that exactly the
 //    elements with a handler report it, with the right preventDefault, and
 //    that the event router sends each report back to the handler on that element.
+//    And each of A, B and C as an HTML string must be exactly what the
+//    browser's innerHTML gives once it's mounted.
 //
 // Usage: node client/test/run.mjs [cases] [seed]
 // Build first: cd client/test/elm && elm make src/ClientSpec.elm --optimize --output=build/spec.js
@@ -408,6 +410,45 @@ unit("raw HTML is the element's content, replaced as a whole", () => {
   check(article.innerHTML === "<p>c</p>", "and the refused patches changed nothing", { html: article.innerHTML });
 });
 
+const signUp = (events) =>
+  el("form", { events }, [
+    el("input", { attrs: { name: "email", value: "a@b.c" } }),
+    el("input", { attrs: { type: "checkbox", name: "news", checked: "" } }),
+    el("input", { attrs: { type: "checkbox", name: "spam" } }),
+    el("input", { attrs: { name: "off", value: "x", disabled: "" } }),
+    el("input", { attrs: { type: "file", name: "avatar" } }),
+    el("textarea", { attrs: { name: "note", value: "hi" } }),
+    el("select", { attrs: { name: "size" } }, [el("option", { attrs: { value: "s" } }, [text("S")]), el("option", { attrs: { value: "m", selected: "" } }, [text("M")])]),
+    el("input", { attrs: { value: "no name" } }),
+    el("button", { attrs: { name: "plan", value: "pro" } }, [text("Go pro")]),
+    el("button", { attrs: { name: "plan", value: "free" } }, [text("Stay free")]),
+  ]);
+const submitted = [["email", "a@b.c"], ["news", "on"], ["note", "hi"], ["size", "m"], ["plan", "pro"]];
+
+unit("formFields sends the fields a form would submit, with its submit button", () => {
+  const { container, sent, jorn } = setup();
+  jorn.mount(signUp({ submit: opts({ preventDefault: true, include: ["formFields"] }) }));
+  const form = container.firstChild;
+  form.requestSubmit(form.querySelector("button"));
+  check(sent.length === 1 && JSON.stringify(sent[0].event.formFields) === JSON.stringify(submitted), "the fields, in order", { sent });
+});
+
+unit("formFields in client mode is added to the live event", () => {
+  const { container, sent, jorn } = setup(true);
+  jorn.mount(signUp({ submit: opts({ preventDefault: true, include: ["formFields"] }) }));
+  const form = container.firstChild;
+  form.requestSubmit(form.querySelectorAll("button")[1]);
+  const want = [...submitted.slice(0, -1), ["plan", "free"]];
+  check(sent.length === 1 && sent[0].event instanceof window.Event && JSON.stringify(sent[0].event.formFields) === JSON.stringify(want), "the fields, with the other button", { fields: sent[0]?.event.formFields });
+});
+
+unit("formFields finds the form of an event's target", () => {
+  const { container, sent, jorn } = setup();
+  jorn.mount(signUp({ change: opts({ include: ["formFields"] }) }));
+  container.querySelector("input").dispatchEvent(new window.Event("change", { bubbles: true }));
+  check(sent.length === 1 && JSON.stringify(sent[0].event.formFields) === JSON.stringify(submitted.slice(0, -1)), "the fields, with no button", { sent });
+});
+
 unit("protocol violations throw", () => {
   const { jorn } = setup();
   jorn.mount(el("div", {}, [text("t")]));
@@ -717,6 +758,15 @@ for (let caseId = 0; caseId < cases.length; caseId++) {
     if (afterC !== wantC) fail("B->C differs from C", { caseId, got: afterC, want: wantC, patches: c.bc });
     if (container.childNodes.length !== 1) fail("container holds more than the root", { caseId });
 
+    for (const [i, node] of [c.a, c.b, c.c].entries()) {
+      const mounted = setup();
+      mounted.jorn.mount(node);
+      if (c.html[i] !== mounted.container.innerHTML) {
+        fail("an HTML string isn't what the browser serializes once mounted", { caseId, view: "ABC"[i], string: c.html[i], mounted: mounted.container.innerHTML });
+      }
+      mounted.container.remove();
+    }
+
     if (afterC !== wantC) continue; // already reported above
     const nodes = elementsOf(c.c);
     const doms = domElementsOf(container.firstChild, c.c);
@@ -757,4 +807,4 @@ if (failed) {
   for (const f of failures) console.log(JSON.stringify(f, null, 2).slice(0, 3000));
   process.exit(1);
 }
-console.log("PASSED: the patcher turns every A into C exactly, and every event routes home.");
+console.log("PASSED: the patcher turns every A into C exactly, every event routes home, and every view's HTML string is what the page serializes.");

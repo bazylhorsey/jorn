@@ -186,6 +186,11 @@ export function connect(container, { send, raw = false, effects = {} } = {}) {
     if (!path) return;
     remember(el);
     const payload = raw ? event : pick(event, options.include);
+    if (options.include.includes("formFields")) {
+      const fields = formFields(event);
+      if (raw) event.formFields = fields;
+      else payload.formFields = fields;
+    }
     if (options.debounce > 0 || options.throttle > 0) {
       limited(el, event.type, options, payload);
     } else {
@@ -827,6 +832,21 @@ function pick(event, include) {
 
 // Property names and event fields come off the wire. These would lead to an
 // object's prototype instead of one of its own fields, so they're ignored.
+// The fields the event's form would submit, as [name, value] pairs, with the
+// button that submitted it. Files can't be sent as text, so they're left out.
+function formFields(event) {
+  const target = event.target;
+  const form = target?.nodeName === "FORM" ? target : target?.form;
+  if (!form) return [];
+  const FormDataOf = form.ownerDocument.defaultView?.FormData ?? globalThis.FormData;
+  const data = new FormDataOf(form);
+  const submitter = event.submitter;
+  if (submitter?.name && submitter.form === form) data.append(submitter.name, submitter.value);
+  const fields = [];
+  for (const [name, value] of data) if (typeof value === "string") fields.push([name, value]);
+  return fields;
+}
+
 function isPrototypeKey(key) {
   return key === "__proto__" || key === "constructor" || key === "prototype";
 }

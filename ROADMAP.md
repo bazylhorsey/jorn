@@ -18,7 +18,7 @@ Statuses: **done** is available today. **partial** is available with a stated di
 | Keyed children | done | `Jorn.Element.Keyed`. Moves DOM nodes instead of rewriting them, with the fewest moves the order allows. |
 | Memoized subtrees | todo | |
 | Raw HTML | done | `Element.unsafeRawHtml`, for content like rendered Markdown. The HTML isn't escaped, and its content is replaced as a whole when it changes. |
-| Render to an HTML string | todo | Needed for server-side rendering. |
+| Render to an HTML string | done | `Element.toString`, `toDocumentString` and `toReadableString`. Matches what the browser's `innerHTML` gives for the mounted view, checked against jsdom on random views. The base for server-side rendering. |
 
 ## Attributes
 
@@ -38,7 +38,7 @@ Statuses: **done** is available today. **partial** is available with a stated di
 |---|---|---|
 | `on` and `custom` | done | Options are static, so the client can decide `preventDefault` instantly without a round trip. |
 | `onClick`, `onInput`, `onCheck`, `onSubmit` | done | |
-| Submitting a form with its fields | todo | |
+| Submitting a form with its fields | done | `Event.onSubmitFields`, and `Event.formFields` for other handlers. The page collects the fields, so it works the same in server mode. File inputs are left out. |
 | `preventDefault` and `stopPropagation` | done | Static, through `custom`. Deciding per event is todo. |
 | Mouse, keyboard, focus, blur, and change helpers | done | Keyboard helpers include `key`, so server components get it. |
 | Debounce and throttle | done | `Event.debounce` and `Event.throttle`. They run in the page, so dropped events never reach a server. |

@@ -6,6 +6,7 @@ import Jorn.Element.Html as Html
 import Jorn.Element.Keyed as Keyed
 import Jorn.Event as Events
 import Jorn.Internal.Event as Event exposing (Error(..))
+import Jorn.Patch
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Test exposing (Test, describe, test)
@@ -15,6 +16,7 @@ type Msg
     = Clicked
     | Typed String
     | Child Int
+    | Submitted (List ( String, String ))
 
 
 view : Element Msg
@@ -135,6 +137,18 @@ suite =
                 Event.route (incoming [] "change" (Encode.object [ ( "target", Encode.object [ ( "value", Encode.string "b" ) ] ) ]))
                     (Html.select [ Events.onChange Typed ] [])
                     |> Expect.equal (Ok (Typed "b"))
+        , test "onSubmitFields decodes the form's fields" <|
+            \_ ->
+                Event.route
+                    (incoming [] "submit" (Encode.object [ ( "formFields", Encode.list (Encode.list Encode.string) [ [ "email", "a@b.c" ], [ "plan", "pro" ] ] ) ]))
+                    (Html.form [ Events.onSubmitFields Submitted ] [])
+                    |> Expect.equal (Ok (Submitted [ ( "email", "a@b.c" ), ( "plan", "pro" ) ]))
+        , test "onSubmitFields prevents default and asks the page for the fields" <|
+            \_ ->
+                Html.form [ Events.onSubmitFields Submitted ] []
+                    |> Jorn.Patch.encodeHtml
+                    |> Encode.encode 0
+                    |> Expect.equal """{"tag":"form","namespace":"","attrs":{},"props":{},"events":{"submit":{"preventDefault":true,"stopPropagation":false,"include":["formFields"]}},"children":[]}"""
         , test "errors render readably" <|
             \_ ->
                 Event.errorToString (NoHandler [ 1, 1 ] "input")
