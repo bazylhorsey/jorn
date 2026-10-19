@@ -4,7 +4,7 @@
 
 Jorn is an attempt to build the web framework that doesn't make you choose. Today every serious option wins on one axis by giving up another. Jorn's bet is that with the right language, you can have all of them at once.
 
-> **Status: v0.2.** You can build apps with Jorn and run them in the browser or on a Node server: every HTML and SVG element, attributes and ARIA, keyed lists, fragments, effects, an app runtime, and server components that reconnect and catch up, on a pure Elm virtual DOM with a tested wire protocol and patcher. The rest of the view layer is next. The rest of this page describes where it's going. See the [roadmap](ROADMAP.md).
+> **Status: v0.2.1.** You can build apps with Jorn and run them in the browser or on a Node server: every HTML, SVG and MathML element, attributes and ARIA, keyed lists, fragments, raw HTML, effects, an app runtime, rendering to HTML strings, and server components that reconnect and catch up, on a pure Elm virtual DOM with a tested wire protocol and patcher. Memoized subtrees are next. The rest of this page describes where it's going. See the [roadmap](ROADMAP.md).
 
 ## What v0.2 gives you
 
@@ -187,7 +187,8 @@ On the server, a small JavaScript runtime runs each connected user's session as 
 | v0.0 | Pure Elm virtual DOM, diff, wire protocol, event routing, and the browser patcher | **Done** |
 | v0.1 | Full HTML and SVG coverage, keyed lists, effects, and an app runtime | **Done** |
 | v0.2 | Server components: a Node runtime over a websocket, with reconnects, limits and elm/http | **Done** |
-| v0.3 | The rest of the view layer: memoized subtrees, raw HTML, MathML, HTML strings, per-event `preventDefault`, form submits | Next |
+| v0.2.1 | MathML elements, raw HTML, rendering to HTML strings, and form submits with their fields | **Done** |
+| v0.3 | The rest of the view layer: memoized subtrees and per-event `preventDefault` | Next |
 | v0.4 | Server-side rendering and hydration, URL routing, server-sent events and polling, messaging a running app from JavaScript | Planned |
 | v0.5 | Components as custom elements: shadow DOM, slots, forms, lifecycle and contexts | Planned |
 | v0.6 | A dev server and build command, querying and simulating apps in tests, and the JavaScript written in TypeScript | Planned |
