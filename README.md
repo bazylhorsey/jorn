@@ -91,6 +91,29 @@ The wire format is specified in [PROTOCOL.md](PROTOCOL.md).
 
 Jorn isn't on the Elm package registry yet. To try it, clone this repo, add its `src` folder to your application's `source-directories` in `elm.json` alongside a dependency on `elm/json`, and load `client/jorn.js` in your page. For server mode, also run `npm install` in `server/`. [examples/todos](examples/todos) shows the wiring, and `examples/serve.mjs` runs it both ways.
 
+## When to use it
+
+As of v0.2, Jorn's strength is running an app on a server, or keeping that choice open. It's a good choice for:
+
+- **Internal tools and admin dashboards.** `update` can query your database directly, so there's no API to build, and the page needs only a small script.
+- **Widgets inside an existing site.** `<jorn-server-component>` drops a server-run component into a page from any stack: a quote calculator, a booking form, a support panel.
+- **Logic that has to stay private.** Pricing rules, exam answers or licensed features never leave the server. The page sees only what they render.
+- **Live status pages.** Each session fetches from your backends with `elm/http` and sends the page only what changed.
+- **Apps that may move between the browser and the server.** In client mode the program runs in the page, and moving it to a server later changes how it's started, not the program. A client-mode app can also put server components in its view, so one page can mix both.
+
+It's not a good choice, yet or at all, for:
+
+- **Apps that will only ever run in the browser.** Plain Elm is better there for now: Jorn has no URL routing or lazy rendering yet.
+- **Views built with elm/html libraries** like elm-ui or elm-css. They produce elm/html's `Html`, which Jorn can't render.
+- **Debugging with Elm's time-travel debugger.** It only works with `Browser` programs, and Jorn's aren't.
+- **Offline-first apps, or users on slow or flaky connections.** In server mode, every click is a round trip.
+
+Later versions widen this (see the [roadmap](#roadmap)):
+
+- **v0.3:** memoized subtrees, so large browser-only apps skip work the way elm/html's `lazy` does.
+- **v0.4:** URL routing, which makes browser-only apps a fair alternative to plain Elm. Also server-side rendering, for content sites with interactive parts, and sessions that can talk to each other, for chat and other live multi-user apps.
+- **v0.5:** custom elements, for sharing Elm components with teams on React or Vue.
+
 ## The problem, in plain terms
 
 When you build a web app today, you make an early, expensive decision about **where your UI runs**.
