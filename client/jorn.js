@@ -52,6 +52,7 @@ export function connect(container, { send, raw = false, effects = {} } = {}) {
   const pristine = new Map(); // "namespace tag" -> untouched element, for property defaults
   const reported = new WeakMap(); // element -> { value: [...], checked: [...] } the user sent, not yet echoed
   const held = new WeakMap(); // element -> Map(event name -> debounce and throttle state)
+  const rawHtml = new WeakSet(); // elements whose content is raw HTML, opaque to Jorn
   let echoed = new Map(); // element -> { name: value } echoes skipped in the current batch
   let changing = false; // true while mount, patch or unmount is changing the DOM
 
@@ -66,7 +67,12 @@ export function connect(container, { send, raw = false, effects = {} } = {}) {
     for (const [name, value] of Object.entries(node.attrs)) el.setAttribute(name, value);
     // Children before live state and properties, so a <select> has its
     // options by the time its value is set.
-    for (const child of node.children) el.appendChild(create(child));
+    if (typeof node.html === "string") {
+      rawHtml.add(el);
+      el.innerHTML = node.html;
+    } else {
+      for (const child of node.children) el.appendChild(create(child));
+    }
     for (const name of Object.keys(LIVE)) if (Object.hasOwn(node.attrs, name)) syncLive(el, name);
     for (const [name, value] of Object.entries(node.props)) setProperty(el, name, value);
     for (const [name, options] of Object.entries(node.events)) setEvent(el, name, options);
@@ -289,9 +295,10 @@ export function connect(container, { send, raw = false, effects = {} } = {}) {
 
   function resolve(path) {
     let node = container.firstChild;
-    // `item` rather than indexing, so a step can only ever reach a child.
+    // `item` rather than indexing, so a step can only ever reach a child. Raw
+    // HTML is opaque: no path leads inside it.
     for (const index of path) {
-      node = node && node.nodeType === 1 && Number.isInteger(index) ? node.childNodes.item(index) : undefined;
+      node = node && node.nodeType === 1 && !rawHtml.has(node) && Number.isInteger(index) ? node.childNodes.item(index) : undefined;
     }
     if (!node) throw new Error(`Jorn: no node at path [${path}]`);
     return node;
@@ -301,6 +308,13 @@ export function connect(container, { send, raw = false, effects = {} } = {}) {
     const node = resolve(path);
     if (node.nodeType !== 1) throw new Error(`Jorn: expected an element at path [${path}]`);
     return node;
+  }
+
+  // An element whose children Jorn manages, as opposed to raw HTML.
+  function parentAt(path) {
+    const el = elementAt(path);
+    if (rawHtml.has(el)) throw new Error(`Jorn: the element at path [${path}] holds raw HTML`);
+    return el;
   }
 
   function childAt(el, index, path) {
@@ -320,6 +334,12 @@ export function connect(container, { send, raw = false, effects = {} } = {}) {
         const node = resolve(patch.path);
         if (node.nodeType !== 3) throw new Error(`Jorn: expected text at path [${patch.path}]`);
         node.data = patch.text;
+        break;
+      }
+      case "set-html": {
+        const el = elementAt(patch.path);
+        if (!rawHtml.has(el)) throw new Error(`Jorn: expected raw HTML at path [${patch.path}]`);
+        el.innerHTML = patch.html;
         break;
       }
       case "set-attr": {
@@ -347,25 +367,25 @@ export function connect(container, { send, raw = false, effects = {} } = {}) {
         removeEvent(elementAt(patch.path), patch.name);
         break;
       case "append": {
-        const el = elementAt(patch.path);
+        const el = parentAt(patch.path);
         const fragment = doc.createDocumentFragment();
         for (const node of patch.nodes) fragment.appendChild(create(node));
         el.appendChild(fragment);
         break;
       }
       case "truncate": {
-        const el = elementAt(patch.path);
+        const el = parentAt(patch.path);
         while (el.childNodes.length > patch.length) el.removeChild(el.lastChild);
         break;
       }
       case "insert": {
-        const el = elementAt(patch.path);
+        const el = parentAt(patch.path);
         if (patch.index < 0 || patch.index > el.childNodes.length) throw new Error(`Jorn: no index ${patch.index} at path [${patch.path}]`);
         el.insertBefore(create(patch.node), el.childNodes[patch.index] ?? null);
         break;
       }
       case "move": {
-        const el = elementAt(patch.path);
+        const el = parentAt(patch.path);
         const child = childAt(el, patch.from, patch.path);
         // `to` counts siblings with the child already taken out.
         if (patch.to < 0 || patch.to >= el.childNodes.length) throw new Error(`Jorn: no index ${patch.to} at path [${patch.path}]`);
@@ -377,7 +397,7 @@ export function connect(container, { send, raw = false, effects = {} } = {}) {
         break;
       }
       case "remove": {
-        const el = elementAt(patch.path);
+        const el = parentAt(patch.path);
         el.removeChild(childAt(el, patch.index, patch.path));
         break;
       }

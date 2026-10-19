@@ -36,6 +36,8 @@ import Set exposing (Set)
 type Element msg
     = Element String String Closing (List (Attribute msg)) (List (Element msg))
       -- namespace, tag, how it closes, attributes, children
+    | Raw String String (List (Attribute msg)) String
+      -- namespace, tag, attributes, inner HTML
     | Text String
     | Fragment (List (Element msg))
     | Keyed String (Element msg)
@@ -346,6 +348,9 @@ root html =
 -- PROJECTION
 
 
+{-| A raw element has `html` and no children. Its content belongs to the
+browser, so nothing on the wire ever points inside it.
+-}
 type Node
     = NodeElement
         { namespace : String
@@ -354,6 +359,7 @@ type Node
         , props : Dict String Value
         , events : Dict String EventOptions
         , children : List Node
+        , html : Maybe String
         }
     | NodeText String
 
@@ -382,6 +388,22 @@ toNode html =
                 , props = f.props
                 , events = Dict.map (\_ ( options, _ ) -> options) f.events
                 , children = List.map toNode (flatten children)
+                , html = Nothing
+                }
+
+        Raw namespace tag attributes content ->
+            let
+                f =
+                    facts attributes
+            in
+            NodeElement
+                { namespace = namespace
+                , tag = tag
+                , attrs = f.attrs
+                , props = f.props
+                , events = Dict.map (\_ ( options, _ ) -> options) f.events
+                , children = []
+                , html = Just content
                 }
 
 
@@ -398,7 +420,12 @@ encodeNode node =
                 , ( "attrs", Encode.dict identity Encode.string r.attrs )
                 , ( "props", Encode.dict identity identity r.props )
                 , ( "events", Encode.dict identity encodeOptions r.events )
-                , ( "children", Encode.list encodeNode r.children )
+                , case r.html of
+                    Just content ->
+                        ( "html", Encode.string content )
+
+                    Nothing ->
+                        ( "children", Encode.list encodeNode r.children )
                 ]
 
 
@@ -440,6 +467,9 @@ map f html =
 
         Element namespace tag closing attributes children ->
             Element namespace tag closing (List.map (mapAttribute f) attributes) (List.map (map f) children)
+
+        Raw namespace tag attributes content ->
+            Raw namespace tag (List.map (mapAttribute f) attributes) content
 
         Fragment children ->
             Fragment (List.map (map f) children)

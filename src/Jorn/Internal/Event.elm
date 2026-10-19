@@ -63,16 +63,24 @@ route incoming element =
             Err (NodeNotFound incoming.path)
 
         Just (Vdom.Element _ _ _ attributes _) ->
-            case Dict.get incoming.name (Vdom.facts attributes).events of
-                Nothing ->
-                    Err (NoHandler incoming.path incoming.name)
+            handle incoming attributes
 
-                Just ( _, handler ) ->
-                    Decode.decodeValue handler incoming.event
-                        |> Result.mapError (DecodeFailed incoming.name)
+        Just (Vdom.Raw _ _ attributes _) ->
+            handle incoming attributes
 
         Just _ ->
             Err (NoHandler incoming.path incoming.name)
+
+
+handle : Incoming -> List (Vdom.Attribute msg) -> Result Error msg
+handle incoming attributes =
+    case Dict.get incoming.name (Vdom.facts attributes).events of
+        Nothing ->
+            Err (NoHandler incoming.path incoming.name)
+
+        Just ( _, handler ) ->
+            Decode.decodeValue handler incoming.event
+                |> Result.mapError (DecodeFailed incoming.name)
 
 
 find : List Int -> Element msg -> Maybe (Element msg)

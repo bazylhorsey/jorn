@@ -30,6 +30,7 @@ type alias Path =
 type Patch
     = Replace Path Node
     | SetText Path String
+    | SetHtml Path String
     | SetAttribute Path String String
     | RemoveAttribute Path String
     | SetProperty Path String Value
@@ -75,6 +76,24 @@ diffHelp reversedPath old new acc =
                         diffFacts (List.reverse reversedPath) (Vdom.facts oldAttrs) (Vdom.facts newAttrs) acc
                 )
                     |> diffList reversedPath (Vdom.flatten oldKids) (Vdom.flatten newKids)
+
+            else
+                Replace (List.reverse reversedPath) (Vdom.toNode new) :: acc
+
+        ( Raw oldNs oldTag oldAttrs oldHtml, Raw newNs newTag newAttrs newHtml ) ->
+            if oldNs == newNs && oldTag == newTag then
+                let
+                    path =
+                        List.reverse reversedPath
+
+                    withFacts =
+                        diffFacts path (Vdom.facts oldAttrs) (Vdom.facts newAttrs) acc
+                in
+                if oldHtml == newHtml then
+                    withFacts
+
+                else
+                    SetHtml path newHtml :: withFacts
 
             else
                 Replace (List.reverse reversedPath) (Vdom.toNode new) :: acc
@@ -405,6 +424,9 @@ encodePatch patch =
 
         SetText path content ->
             op "set-text" path [ ( "text", Encode.string content ) ]
+
+        SetHtml path content ->
+            op "set-html" path [ ( "html", Encode.string content ) ]
 
         SetAttribute path name value ->
             op "set-attr" path [ ( "name", Encode.string name ), ( "value", Encode.string value ) ]
