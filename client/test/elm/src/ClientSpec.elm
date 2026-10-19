@@ -136,6 +136,14 @@ mutate html =
         Keyed key kid ->
             Random.map (Keyed key) (mutate kid)
 
+        Raw ns tag attrs content ->
+            Random.weighted ( 6, Random.constant html )
+                [ ( 1, Random.map (Raw ns tag attrs) rawHtml )
+                , ( 1, Random.int 0 2 |> Random.andThen (\n -> Random.list n attribute) |> Random.map (\new -> Raw ns tag (dedupe new) content) )
+                , ( 0.5, tree 2 )
+                ]
+                |> Random.andThen identity
+
         Element ns tag closing attrs kids ->
             Random.weighted ( 40, Random.constant Nothing ) [ ( 1, Random.map Just (tree 2) ) ]
                 |> Random.andThen identity
@@ -243,7 +251,7 @@ tree depth =
         text
 
     else
-        Random.weighted ( 1, text ) [ ( 3, element depth ), ( 1, fragment depth ), ( 1, keyedList depth ) ]
+        Random.weighted ( 1, text ) [ ( 3, element depth ), ( 1, fragment depth ), ( 1, keyedList depth ), ( 0.5, raw ) ]
             |> Random.andThen identity
 
 
@@ -273,6 +281,22 @@ fragment depth =
     Random.int 0 3
         |> Random.andThen (\n -> Random.list n (tree (depth - 1)))
         |> Random.map Fragment
+
+
+{-| Raw HTML, with and without elements inside, so the test also checks that
+nothing reaches into it.
+-}
+raw : Generator (Vdom.Element ())
+raw =
+    Random.map3 (Raw "")
+        (Random.uniform "div" [ "span" ])
+        (Random.int 0 2 |> Random.andThen (\n -> Random.list n attribute) |> Random.map dedupe)
+        rawHtml
+
+
+rawHtml : Generator String
+rawHtml =
+    Random.uniform "" [ "a", "<i>a</i>", "<b>b</b><i>c</i>" ]
 
 
 element : Int -> Generator (Vdom.Element ())
@@ -405,6 +429,9 @@ labelHelp html next =
             in
             ( Element ns tag closing (List.map (relabel id) attrs) newKids, after )
 
+        Raw ns tag attrs content ->
+            ( Raw ns tag (List.map (relabel (String.fromInt next)) attrs) content, next + 1 )
+
 
 {-| A fragment isn't an element, so its children carry on the numbering of
 their parent's, which is the order they appear in on screen.
@@ -468,6 +495,13 @@ survivorsHelp oldPath newPath old new acc =
                     |> List.foldl
                         (\( ( i, o ), ( j, n ) ) a -> survivorsHelp (i :: oldPath) (j :: newPath) o n a)
                         (( List.reverse oldPath, List.reverse newPath ) :: acc)
+
+            else
+                acc
+
+        ( Raw oldNs oldTag _ _, Raw newNs newTag _ _ ) ->
+            if oldNs == newNs && oldTag == newTag then
+                ( List.reverse oldPath, List.reverse newPath ) :: acc
 
             else
                 acc

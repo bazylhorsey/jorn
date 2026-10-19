@@ -52,6 +52,14 @@ suite =
                     (incoming [ 1, 0 ] "input" (Encode.object [ ( "target", Encode.object [ ( "value", Encode.string "hi" ) ] ) ]))
                     view
                     |> Expect.equal (Ok (Typed "hi"))
+        , test "routes to a raw element's own handler" <|
+            \_ ->
+                Event.route (incoming [ 0 ] "click" noPayload) (Html.div [] [ Element.unsafeRawHtml "" "div" [ Events.onClick Clicked ] "<p>hi</p>" ])
+                    |> Expect.equal (Ok Clicked)
+        , test "never routes into raw content" <|
+            \_ ->
+                Event.route (incoming [ 0, 0 ] "click" noPayload) (Html.div [] [ Element.unsafeRawHtml "" "div" [ Events.onClick Clicked ] "<p>hi</p>" ])
+                    |> Expect.equal (Err (NodeNotFound [ 0, 0 ]))
         , test "routes through map" <|
             \_ ->
                 Event.route (incoming [ 2 ] "click" noPayload) view

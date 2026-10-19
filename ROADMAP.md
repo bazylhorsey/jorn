@@ -13,11 +13,11 @@ Statuses: **done** is available today. **partial** is available with a stated di
 | `Element.map` | partial | Eager: walks the subtree. A lazy map needs kernel code, which a pure package can't use. |
 | HTML element helpers | done | All standard elements in `Jorn.Element.Html`. Void elements (`br`, `img`, `input`, ...) take only attributes. |
 | SVG element helpers | done | `Jorn.Element.Svg`. Attributes go through `Attribute.attribute`. |
-| MathML element helpers | todo | |
+| MathML element helpers | done | `Jorn.Element.MathMl`, the elements of MathML Core. Attributes go through `Attribute.attribute`. |
 | `none`, `fragment` and `advanced` | done | Fragments are spliced into their parent before diffing, so they never appear on the wire. |
 | Keyed children | done | `Jorn.Element.Keyed`. Moves DOM nodes instead of rewriting them, with the fewest moves the order allows. |
 | Memoized subtrees | todo | |
-| Raw HTML | todo | |
+| Raw HTML | done | `Element.unsafeRawHtml`, for content like rendered Markdown. The HTML isn't escaped, and its content is replaced as a whole when it changes. |
 | Render to an HTML string | todo | Needed for server-side rendering. |
 
 ## Attributes

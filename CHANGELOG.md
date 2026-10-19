@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- `Jorn.Element.MathMl` has a function for every MathML Core element, in the MathML namespace (#14).
+- `Element.unsafeRawHtml` makes an element whose content is a string of HTML, for content like rendered Markdown (#12). The HTML is set as the element's `innerHTML` without being escaped. The element's own attributes and handlers diff as usual, and new HTML replaces the old as a whole, with a new `set-html` patch. A raw node has `html` in place of `children` on the wire, and the patcher refuses any patch aimed inside it.
+
 ## v0.2 (2026-10-19)
 
 Server components: run an app on a Node server and stream it to the page over a websocket, with reconnects, limits, debounced and throttled events, and elm/http on the server.

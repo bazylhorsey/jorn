@@ -21,6 +21,7 @@ suite =
     describe "Jorn.Patch.diff"
         [ unit
         , keyed
+        , raw
         , wire
         , properties
         ]
@@ -437,6 +438,55 @@ keyed =
 {-| Pins the wire format. If this test changes, the protocol changed, and the
 JS client and PROTOCOL.md have to change with it.
 -}
+raw : Test
+raw =
+    describe "raw HTML"
+        [ test "the same HTML produces no patches" <|
+            \_ ->
+                let
+                    tree =
+                        Element.unsafeRawHtml "" "div" [ Attr.class "a" ] "<p>hi</p>"
+                in
+                Jorn.Patch.diff tree tree |> expectPatches []
+        , test "changed HTML is set as a whole" <|
+            \_ ->
+                Jorn.Patch.diff
+                    (Html.div [] [ Element.unsafeRawHtml "" "div" [] "<p>a</p>" ])
+                    (Html.div [] [ Element.unsafeRawHtml "" "div" [] "<p>b</p>" ])
+                    |> expectPatches [ SetHtml [ 0 ] "<p>b</p>" ]
+        , test "the element's own attributes are diffed as usual" <|
+            \_ ->
+                Jorn.Patch.diff
+                    (Element.unsafeRawHtml "" "div" [ Attr.class "a" ] "x")
+                    (Element.unsafeRawHtml "" "div" [ Attr.class "b" ] "x")
+                    |> expectPatches [ SetAttribute [] "class" "b" ]
+        , test "a raw element and an ordinary one replace each other" <|
+            \_ ->
+                let
+                    plain =
+                        Html.div [] [ Element.text "x" ]
+
+                    rawDiv =
+                        Element.unsafeRawHtml "" "div" [] "x"
+                in
+                ( Jorn.Patch.diff plain rawDiv, Jorn.Patch.diff rawDiv plain )
+                    |> Expect.all
+                        [ Tuple.first >> expectPatches [ Replace [] (node rawDiv) ]
+                        , Tuple.second >> expectPatches [ Replace [] (node plain) ]
+                        ]
+        , test "a different tag replaces" <|
+            \_ ->
+                Jorn.Patch.diff
+                    (Element.unsafeRawHtml "" "div" [] "x")
+                    (Element.unsafeRawHtml "" "span" [] "x")
+                    |> expectPatches [ Replace [] (node (Element.unsafeRawHtml "" "span" [] "x")) ]
+        , test "the reference patcher rejects patches aimed inside raw content" <|
+            \_ ->
+                Reference.apply [ Append [] [ node (Element.text "x") ] ] (node (Element.unsafeRawHtml "" "div" [] "<p>a</p>"))
+                    |> Expect.equal Nothing
+        ]
+
+
 wire : Test
 wire =
     describe "wire format"
@@ -484,6 +534,19 @@ wire =
                     |> Encode.encode 0
                     |> Expect.equal
                         """{"tag":"button","namespace":"","attrs":{"disabled":""},"props":{},"events":{"click":{"preventDefault":false,"stopPropagation":false,"include":[]}},"children":[{"text":"go"}]}"""
+        , test "golden raw HTML encoding" <|
+            \_ ->
+                Jorn.Patch.diff
+                    (Html.div [] [ Element.unsafeRawHtml "" "div" [] "<p>a</p>" ])
+                    (Html.div [] [ Element.unsafeRawHtml "" "div" [] "<p>b</p>", Element.unsafeRawHtml "" "section" [ Attr.class "x" ] "<b>c</b>" ])
+                    |> Jorn.Patch.encode
+                    |> Encode.encode 0
+                    |> Expect.equal
+                        ("["
+                            ++ """{"op":"set-html","path":[0],"html":"<p>b</p>"},"""
+                            ++ """{"op":"append","path":[],"nodes":[{"tag":"section","namespace":"","attrs":{"class":"x"},"props":{},"events":{},"html":"<b>c</b>"}]}"""
+                            ++ "]"
+                        )
         , test "golden debounce and throttle encoding" <|
             \_ ->
                 Html.input [ Events.debounce 300 (Events.onInput identity), Events.throttle 100 (Events.on "scroll" (Decode.succeed "")) ]
@@ -547,6 +610,12 @@ html depth =
                     (Fuzz.listOfLengthBetween 0 3 (html (depth - 1)))
               )
             , ( 1, Fuzz.map Element.fragment (Fuzz.listOfLengthBetween 0 3 (html (depth - 1))) )
+            , ( 1
+              , Fuzz.map3 (Element.unsafeRawHtml "")
+                    (Fuzz.oneOfValues [ "div", "span" ])
+                    (Fuzz.listOfLengthBetween 0 2 attribute)
+                    (Fuzz.oneOfValues [ "", "a", "<i>a</i>" ])
+              )
             , ( 2
               , Fuzz.map2 (Vdom.Element "" "ul" Vdom.Normal)
                     (Fuzz.listOfLengthBetween 0 2 attribute)

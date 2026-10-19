@@ -3,6 +3,7 @@ module Jorn.Element exposing
     , element, namespaced, text, map
     , none, fragment
     , advanced, Closing(..)
+    , unsafeRawHtml
     )
 
 {-| A pure Elm virtual DOM. Unlike `elm/html`, these values are ordinary data,
@@ -28,6 +29,11 @@ patches to one.
 # Full control
 
 @docs advanced, Closing
+
+
+# Raw HTML
+
+@docs unsafeRawHtml
 
 -}
 
@@ -120,6 +126,28 @@ for HTML), its tag, and how its tags are written when rendered as HTML.
 advanced : { namespace : String, tag : String, closing : Closing } -> List (Attribute msg) -> List (Element msg) -> Element msg
 advanced options attributes children =
     Vdom.Element options.namespace options.tag (toClosing options.closing) attributes children
+
+
+{-| An element whose content is a string of HTML, set as its `innerHTML`.
+For content that arrives as HTML, like rendered Markdown:
+
+    Element.unsafeRawHtml "" "article" [ Attribute.class "post" ] post.html
+
+The arguments are the namespace (`""` for HTML), the tag, the element's own
+attributes, and the HTML inside it.
+
+**The HTML is not escaped or checked.** Whatever it contains goes into the
+page, including attributes like `onerror` that run JavaScript. Only pass HTML
+you trust or have sanitized, never text a user typed.
+
+The element's own attributes and handlers work as usual, and events from
+inside the content bubble up to them. The content itself is opaque to Jorn: it
+has no handlers of its own, and when the HTML changes, it's replaced as a whole.
+
+-}
+unsafeRawHtml : String -> String -> List (Attribute msg) -> String -> Element msg
+unsafeRawHtml namespace tag attributes html =
+    Vdom.Raw namespace tag attributes html
 
 
 {-| How an element's tags are written as HTML. Only rendering to a string is

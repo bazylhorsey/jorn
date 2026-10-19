@@ -3,6 +3,7 @@ module ElementTest exposing (suite)
 import Expect
 import Jorn.Element as Element
 import Jorn.Element.Html as Html
+import Jorn.Element.MathMl as MathMl
 import Jorn.Element.Svg as Svg
 import Jorn.Internal.Vdom as Vdom
 import Test exposing (Test, describe, test)
@@ -25,6 +26,19 @@ suite =
         , test "Html.svg and Svg.svg agree" <|
             \_ ->
                 shape (Html.svg [] []) |> Expect.equal (shape (Svg.svg [] []))
+        , test "MathML elements are in the MathML namespace" <|
+            \_ ->
+                [ MathMl.math [] [], MathMl.mi [] [], MathMl.mfrac [] [], MathMl.mmultiscripts [] [], MathMl.mprescripts [] [] ]
+                    |> List.map shape
+                    |> Expect.equal
+                        (List.map (\tag -> Just ( MathMl.namespace, tag, Vdom.Normal )) [ "math", "mi", "mfrac", "mmultiscripts", "mprescripts" ])
+        , test "annotationXml is <annotation-xml>" <|
+            \_ ->
+                shape (MathMl.annotationXml [] [])
+                    |> Expect.equal (Just ( MathMl.namespace, "annotation-xml", Vdom.Normal ))
+        , test "Html.math and MathMl.math agree" <|
+            \_ ->
+                shape (Html.math [] []) |> Expect.equal (shape (MathMl.math [] []))
         , test "an element helper uses its tag name" <|
             \_ ->
                 Html.blockquote [] []
