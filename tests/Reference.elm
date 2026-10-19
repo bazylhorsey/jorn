@@ -45,6 +45,22 @@ applyOne patch root =
                 )
                 root
 
+        SetHtml path content ->
+            at path
+                (\n ->
+                    case n of
+                        NodeElement r ->
+                            if r.html == Nothing then
+                                Nothing
+
+                            else
+                                Just (NodeElement { r | html = Just content })
+
+                        NodeText _ ->
+                            Nothing
+                )
+                root
+
         SetAttribute path name value ->
             element path (\r -> { r | attrs = Dict.insert name value r.attrs }) root
 
@@ -64,20 +80,20 @@ applyOne patch root =
             element path (\r -> { r | events = Dict.remove name r.events }) root
 
         Append path nodes ->
-            element path (\r -> { r | children = r.children ++ nodes }) root
+            parent path (\r -> { r | children = r.children ++ nodes }) root
 
         Truncate path length ->
-            element path (\r -> { r | children = List.take length r.children }) root
+            parent path (\r -> { r | children = List.take length r.children }) root
 
         Insert path index node ->
-            element path (\r -> { r | children = List.take index r.children ++ node :: List.drop index r.children }) root
+            parent path (\r -> { r | children = List.take index r.children ++ node :: List.drop index r.children }) root
                 |> Maybe.andThen (validIndex index (index <= childCount path root))
 
         Move path from to ->
             childAt path from root
                 |> Maybe.andThen
                     (\moved ->
-                        element path
+                        parent path
                             (\r ->
                                 let
                                     without =
@@ -91,7 +107,7 @@ applyOne patch root =
 
         Remove path index ->
             childAt path index root
-                |> Maybe.andThen (\_ -> element path (\r -> { r | children = List.take index r.children ++ List.drop (index + 1) r.children }) root)
+                |> Maybe.andThen (\_ -> parent path (\r -> { r | children = List.take index r.children ++ List.drop (index + 1) r.children }) root)
 
 
 {-| An index past the end is invalid, rather than quietly clamped.
@@ -129,14 +145,28 @@ childAt path index root =
                 Nothing
 
 
-element :
-    Path
-    ->
-        ({ namespace : String, tag : String, attrs : Dict.Dict String String, props : Dict.Dict String Encode.Value, events : Dict.Dict String Vdom.EventOptions, children : List Node }
-         -> { namespace : String, tag : String, attrs : Dict.Dict String String, props : Dict.Dict String Encode.Value, events : Dict.Dict String Vdom.EventOptions, children : List Node }
-        )
-    -> Node
-    -> Maybe Node
+type alias ElementRecord =
+    { namespace : String, tag : String, attrs : Dict.Dict String String, props : Dict.Dict String Encode.Value, events : Dict.Dict String Vdom.EventOptions, children : List Node, html : Maybe String }
+
+
+{-| Patches that change an element's children. A raw element has none to
+change: its content belongs to the browser.
+-}
+parent : Path -> (ElementRecord -> ElementRecord) -> Node -> Maybe Node
+parent path f root =
+    case nodeAt path root of
+        Just (NodeElement r) ->
+            if r.html == Nothing then
+                element path f root
+
+            else
+                Nothing
+
+        _ ->
+            Nothing
+
+
+element : Path -> (ElementRecord -> ElementRecord) -> Node -> Maybe Node
 element path f root =
     at path
         (\n ->

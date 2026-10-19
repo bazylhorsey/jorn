@@ -24,6 +24,15 @@ A view's root is always a single node. A fragment at the root becomes an empty t
   "children": [] }
 ```
 
+An element made with `Element.unsafeRawHtml` has `html` in place of `children`:
+
+```json
+{ "tag": "article", "namespace": "", "attrs": {}, "props": {}, "events": {},
+  "html": "<p>Rendered <em>Markdown</em></p>" }
+```
+
+The client sets `html` as the element's `innerHTML`, without checking it. Its content is opaque: no path ever leads inside it, and patches that would change its children are protocol errors. Listeners are only installed on nodes from the wire, so events from inside the content reach Elm only through handlers on the raw element or its ancestors, with their paths.
+
 `namespace` is `""` for HTML. `attrs` are strings set with `setAttribute`. `props` are JSON values assigned to the DOM object; the client ignores the names `__proto__`, `constructor` and `prototype`, so a property can't change what kind of object an element is. `events` tell the client which listeners to install and how; the handlers themselves never leave Elm. An event's options can also have `debounce` and `throttle`, in milliseconds, which are left out when they're not used (below).
 
 ## Patches
@@ -34,6 +43,7 @@ A patch message is a JSON array of patches. **Apply them strictly in order.** Th
 |---|---|---|
 | `replace` | `node` | Replace the node at `path` |
 | `set-text` | `text` | Set the text node's content |
+| `set-html` | `html` | Replace a raw element's content, as its `innerHTML` |
 | `set-attr` | `name`, `value` | `setAttribute`, then sync live state (below) |
 | `remove-attr` | `name` | `removeAttribute`, then sync live state (below) |
 | `set-prop` | `name`, `value` | Assign the property |

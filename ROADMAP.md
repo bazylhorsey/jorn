@@ -17,7 +17,7 @@ Statuses: **done** is available today. **partial** is available with a stated di
 | `none`, `fragment` and `advanced` | done | Fragments are spliced into their parent before diffing, so they never appear on the wire. |
 | Keyed children | done | `Jorn.Element.Keyed`. Moves DOM nodes instead of rewriting them, with the fewest moves the order allows. |
 | Memoized subtrees | todo | |
-| Raw HTML | todo | |
+| Raw HTML | done | `Element.unsafeRawHtml`, for content like rendered Markdown. The HTML isn't escaped, and its content is replaced as a whole when it changes. |
 | Render to an HTML string | todo | Needed for server-side rendering. |
 
 ## Attributes

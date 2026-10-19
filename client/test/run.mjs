@@ -380,6 +380,34 @@ unit("names that lead to a prototype are ignored", () => {
   check({}.NONE === undefined && {}.polluted === undefined, "Object.prototype is untouched");
 });
 
+const rawEl = (tag, options, html) => {
+  const { children, ...node } = el(tag, options);
+  return { ...node, html };
+};
+
+unit("raw HTML is the element's content, replaced as a whole", () => {
+  const { container, sent, jorn } = setup();
+  jorn.mount(el("div", {}, [rawEl("article", { attrs: { class: "post" }, events: { click: opts() } }, "<p>a <b>b</b></p>")]));
+  const article = container.firstChild.firstChild;
+  check(article.innerHTML === "<p>a <b>b</b></p>" && article.className === "post", "mounted", { html: article.innerHTML });
+  article.querySelector("b").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  check(sent.length === 1 && JSON.stringify(sent[0].path) === "[0]", "a click inside bubbles to the raw element's handler", { sent });
+  jorn.patch([{ op: "set-html", path: [0], html: "<p>c</p>" }]);
+  check(container.firstChild.firstChild === article && article.innerHTML === "<p>c</p>", "set-html replaces the content in place", { html: article.innerHTML });
+  const throws = (patch) => {
+    try {
+      jorn.patch([patch]);
+      return false;
+    } catch {
+      return true;
+    }
+  };
+  check(throws({ op: "set-attr", path: [0, 0], name: "a", value: "b" }), "no path leads inside raw HTML");
+  check(throws({ op: "append", path: [0], nodes: [text("x")] }), "raw HTML has no children to patch");
+  check(throws({ op: "set-html", path: [], html: "x" }), "set-html on an ordinary element throws");
+  check(article.innerHTML === "<p>c</p>", "and the refused patches changed nothing", { html: article.innerHTML });
+});
+
 unit("protocol violations throw", () => {
   const { jorn } = setup();
   jorn.mount(el("div", {}, [text("t")]));
@@ -585,9 +613,11 @@ const ask = (port, payload) =>
     app.ports[port].send(payload);
   });
 
-// What the DOM should look like, worked out from the node alone.
+// What the DOM should look like, worked out from the node alone. Raw HTML is
+// compared as the browser serializes it, which is what `want` is for.
 function expected(node) {
   if (typeof node.text === "string") return { text: node.text };
+  const content = typeof node.html === "string" ? { html: serialized(node.html) } : { children: node.children.map(expected) };
   const flag = (name) => (name in node.props ? node.props[name] : name in node.attrs);
   const props = {};
   if (!node.namespace && node.tag === "input") {
@@ -601,12 +631,22 @@ function expected(node) {
     ns: node.namespace || XHTML,
     attrs: Object.entries(node.attrs).map(([k, v]) => `${k}=${v}`).sort(),
     props,
-    children: node.children.map(expected),
+    ...content,
   };
 }
 
-function actual(dom) {
+function serialized(html) {
+  const el = window.document.createElement("div");
+  el.innerHTML = html;
+  return el.innerHTML;
+}
+
+function actual(dom, want) {
   if (dom.nodeType === 3) return { text: dom.data };
+  const content =
+    want && "html" in want
+      ? { html: dom.innerHTML }
+      : { children: [...dom.childNodes].map((child, i) => actual(child, want?.children?.[i])) };
   const props = {};
   if (dom.namespaceURI === XHTML && dom.localName === "input") {
     props.checked = dom.checked;
@@ -619,15 +659,24 @@ function actual(dom) {
     ns: dom.namespaceURI,
     attrs: [...dom.attributes].map((a) => `${a.name}=${a.value}`).sort(),
     props,
-    children: [...dom.childNodes].map(actual),
+    ...content,
   };
 }
 
 // Elements in document order, matching the labels Elm gave each handler.
+// Nothing inside raw HTML is Jorn's, so neither list goes into it.
 function elementsOf(node, out = []) {
   if (typeof node.text === "string") return out;
   out.push(node);
-  for (const child of node.children) elementsOf(child, out);
+  for (const child of node.children ?? []) elementsOf(child, out);
+  return out;
+}
+
+function domElementsOf(dom, node, out = []) {
+  if (typeof node.text === "string") return out;
+  out.push(dom);
+  if (typeof node.html === "string") return out;
+  node.children.forEach((child, i) => domElementsOf(dom.childNodes[i], child, out));
   return out;
 }
 
@@ -655,22 +704,22 @@ for (let caseId = 0; caseId < cases.length; caseId++) {
     jorn.patch(c.ab);
     patches += c.ab.length;
     checkKept(jorn, c.keepAB, keptAB, "A->B", caseId);
-    const afterB = JSON.stringify(actual(container.firstChild));
     const wantB = JSON.stringify(expected(c.b));
+    const afterB = JSON.stringify(actual(container.firstChild, expected(c.b)));
     if (afterB !== wantB) fail("A->B differs from B", { caseId, got: afterB, want: wantB, patches: c.ab });
 
     const keptBC = c.keepBC.map(([from]) => jorn.nodeAt(from));
     jorn.patch(c.bc);
     patches += c.bc.length;
     checkKept(jorn, c.keepBC, keptBC, "B->C", caseId);
-    const afterC = JSON.stringify(actual(container.firstChild));
     const wantC = JSON.stringify(expected(c.c));
+    const afterC = JSON.stringify(actual(container.firstChild, expected(c.c)));
     if (afterC !== wantC) fail("B->C differs from C", { caseId, got: afterC, want: wantC, patches: c.bc });
     if (container.childNodes.length !== 1) fail("container holds more than the root", { caseId });
 
-    const doms = [...container.querySelectorAll("*")];
+    if (afterC !== wantC) continue; // already reported above
     const nodes = elementsOf(c.c);
-    if (doms.length !== nodes.length) continue; // already reported above
+    const doms = domElementsOf(container.firstChild, c.c);
 
     for (const [position, dom] of doms.entries()) {
       for (const name of ["click", "input", "mouseover"]) {
