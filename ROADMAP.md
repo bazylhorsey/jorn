@@ -60,15 +60,12 @@ Statuses: **done** is available today. **partial** is available with a stated di
 | Effects (`Effect.none`, `batch`, `map`, ...) | done | `Jorn.Effect`: Elm commands, focus and scrolling, paint timing, custom events and named client effects. Contexts come with #28. |
 | Browser patcher (small JavaScript) | done | [client/jorn.js](client/jorn.js). Checked against [tests/Reference.elm](tests/Reference.elm)'s semantics with randomized diffs in `client/test/`. |
 | Server components in a page (`Jorn.ServerComponent.element`, `<jorn-server-component>`) | done | Connects while it's in the document, and keeps the connection when it moves. |
-| Server runtime over a websocket (Node, Bun, Deno) | partial | Node, in [server/jorn.js](server/jorn.js), with `stream` in the page. Pages reconnect to their sessions and catch up, heartbeats and limits keep the server healthy, and elm/http works on the server. Bun and Deno come with #23. |
+| Server runtime over a websocket (Node, Bun, Deno) | partial | Node, in [server/jorn.js](server/jorn.js), with `stream` in the page. Pages reconnect to their sessions and catch up, heartbeats and limits keep the server healthy, and elm/http works on the server. Bun and Deno come after 1.0, with #23. |
 | Components as custom elements (attributes, properties, slots, form association) | todo | |
 | Server-side rendering and hydration | todo | |
 | Server components over server-sent events or polling | todo | For hosts and proxies that don't allow websockets. |
 | URL routing | todo | Jorn programs run on `Platform.worker`, which has no `Browser.Navigation`. |
 | Messaging a running app from JavaScript | todo | Through the program's own ports. |
-| Generated encoders for shared client/server types | todo | After 1.0. |
-| Session snapshots and typed migrations across deploys | todo | After 1.0. |
-| REST endpoints written in Elm | todo | After 1.0. |
 
 ## Tooling and testing
 
@@ -77,6 +74,19 @@ Statuses: **done** is available today. **partial** is available with a stated di
 | Query a view (find by tag, class, id, text, ...) | todo | |
 | Simulate an app (send messages and events, inspect model and view) | todo | |
 | Dev server and build command | todo | |
+| JavaScript written in TypeScript, with built files on each release | todo | |
+
+## After 1.0
+
+The full feature set comes first. These build on it, and start once 1.0 is out.
+
+| Feature | Status | Notes |
+|---|---|---|
+| Generated encoders for types shared by the browser and the server | todo | For apps running in the browser that talk to a server. Server components don't need them: only events and patches cross the network. |
+| Keeping sessions across a deploy | todo | Reattach each page to its session when the new version starts. |
+| Session snapshots and typed migrations across deploys | todo | |
+| REST endpoints written in Elm | todo | |
+| Bun and Deno | todo | |
 
 ## Performance
 
