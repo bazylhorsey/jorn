@@ -36,14 +36,18 @@ const FRAME_MS = 16;
  * Start one instance of `program` and connect it to `send`. Hand everything
  * the page sends to `receive`, and call `close` when the page goes away.
  *
+ * For a `Jorn.resumable` program, `snapshot` gets its model as its `encode`
+ * writes it, and passing that back as `restore`, even to a newer version of
+ * the program, starts it from that model instead of from `init`.
+ *
  * Throws if the program won't start, for example when `flags` don't match
  * what its `init` expects.
  *
  * @param {{ init: (options: { flags?: unknown }) => { ports: Record<string, any> } }} program
- * @param {{ send: (message: object) => void, flags?: unknown, ports?: { toJorn?: string, fromJorn?: string }, log?: Pick<Console, "warn"> }} options
- * @returns {{ receive: (message: unknown) => void, close: () => void }}
+ * @param {{ send: (message: object) => void, flags?: unknown, restore?: unknown, ports?: { toJorn?: string, fromJorn?: string }, log?: Pick<Console, "warn"> }} options
+ * @returns {{ receive: (message: unknown) => void, snapshot: () => Promise<unknown>, close: () => void }}
  */
-export function session(program, { send, flags, ports = {}, log = console } = {}) {
+export function session(program, { send, flags, restore, ports = {}, log = console } = {}) {
   if (typeof send !== "function") {
     throw new TypeError("Jorn: session needs a send function");
   }
@@ -59,6 +63,9 @@ export function session(program, { send, flags, ports = {}, log = console } = {}
   let running = true;
   let frame = null;
   let lastFrame = -Infinity;
+  let resumable = false; // Set when the program says it's waiting to be told how to start.
+  let mounted = false;
+  const snapshots = []; // Waiting for the program's model.
 
   function requestFrame() {
     if (frame) return;
@@ -74,6 +81,19 @@ export function session(program, { send, flags, ports = {}, log = console } = {}
   // needs to draw goes over the wire.
   function fromProgram(message) {
     if (!running) return;
+    if (message.ready) {
+      resumable = true;
+      into.send(restore === undefined ? { fresh: true } : { restore });
+      return;
+    }
+    if ("snapshot" in message) {
+      for (const resolve of snapshots.splice(0)) resolve(message.snapshot ?? undefined);
+      return;
+    }
+    if (message.mount && !mounted) {
+      mounted = true;
+      if (restore !== undefined && !resumable) log.warn("Jorn: the program isn't Jorn.resumable, so a saved session started over");
+    }
     if (message.frame) requestFrame();
     if (message.error) log.warn(`Jorn: ${message.error}`);
     if (message.mount) send(message.painted ? { mount: message.mount, painted: true } : { mount: message.mount });
@@ -96,6 +116,19 @@ export function session(program, { send, flags, ports = {}, log = console } = {}
       else if (message.remount === true) into.send({ remount: true });
     },
 
+    /**
+     * The program's model, as its `encode` writes it, to start it again from
+     * later with `restore`. Undefined for a program that isn't
+     * `Jorn.resumable`, or one that hasn't started yet.
+     */
+    snapshot() {
+      if (!running || !resumable) return Promise.resolve(undefined);
+      return new Promise((resolve) => {
+        snapshots.push(resolve);
+        into.send({ snapshot: true });
+      });
+    },
+
     /** Stop the program. Anything after this is ignored. */
     close() {
       if (!running) return;
@@ -103,6 +136,7 @@ export function session(program, { send, flags, ports = {}, log = console } = {}
       clearTimeout(frame);
       out.unsubscribe(fromProgram);
       into.send({ shutdown: true });
+      for (const resolve of snapshots.splice(0)) resolve(undefined);
     },
   };
 }
@@ -127,6 +161,11 @@ export function session(program, { send, flags, ports = {}, log = console } = {}
  * when it missed too many to replay. A page that closes on purpose ends its
  * session straight away.
  *
+ * With `snapshots`, a store such as a Map, `close` saves the model of every
+ * `Jorn.resumable` session first, and a page that comes back to the next
+ * server with the same store picks up where it was. Keep the store somewhere
+ * that outlives the process to keep sessions across a deploy.
+ *
  * @param {import("node:http").Server} server
  * @param {{
  *   program: object,
@@ -141,6 +180,7 @@ export function session(program, { send, flags, ports = {}, log = console } = {}
  *   maxSessions?: number,
  *   maxMessagesPerSecond?: number,
  *   maxPayload?: number,
+ *   snapshots?: { get: (id: string) => unknown, set: (id: string, model: string) => unknown, delete: (id: string) => unknown },
  *   log?: Pick<Console, "warn" | "error"> & Partial<Pick<Console, "info">>,
  * }} options
  * @returns {{ readonly sessions: number, close: () => Promise<void> }}
@@ -160,6 +200,7 @@ export function attach(
     maxSessions = Infinity,
     maxMessagesPerSecond = 100,
     maxPayload = 1 << 20,
+    snapshots,
     log = console,
   } = {},
 ) {
@@ -171,6 +212,45 @@ export function attach(
   const live = new Map(); // session id -> Session, connected or waiting for its page
   const info = (line) => log.info?.(line);
   let counter = 0;
+
+  // A saved session's model, or undefined. A store that fails means starting
+  // over, not turning the page away.
+  async function recall(id) {
+    if (!snapshots) return undefined;
+    try {
+      const saved = await snapshots.get(id);
+      return saved == null ? undefined : JSON.parse(saved);
+    } catch (error) {
+      log.warn(`Jorn: couldn't read a saved session: ${error?.message ?? error}`);
+      return undefined;
+    }
+  }
+
+  async function forget(id) {
+    try {
+      await snapshots.delete(id);
+    } catch (error) {
+      log.warn(`Jorn: couldn't delete a saved session: ${error?.message ?? error}`);
+    }
+  }
+
+  // Each resumable session's model, under the id its page will come back with.
+  async function save() {
+    let count = 0;
+    await Promise.all(
+      [...live.values()].map(async (current) => {
+        try {
+          const model = await within(1000, current.program?.snapshot());
+          if (model === undefined) return;
+          await snapshots.set(current.id, JSON.stringify(model));
+          count++;
+        } catch (error) {
+          log.warn(`Jorn: couldn't save ${current.name}: ${error?.message ?? error}`);
+        }
+      }),
+    );
+    if (count) info(`Jorn: saved ${count} session${count === 1 ? "" : "s"} for pages to pick up after the restart`);
+  }
 
   function upgrade(request, socket, head) {
     if (new URL(request.url, "http://localhost").pathname !== path) return; // Someone else's.
@@ -325,6 +405,9 @@ export function attach(
           return;
         }
 
+        // A page from before a restart can pick up the model its session had.
+        const saved = typeof join.session === "string" ? await recall(join.session) : undefined;
+        if (socket.readyState !== socket.OPEN) return;
         const value = flags ? await flags({ request, page: join.flags }) : undefined;
         if (socket.readyState !== socket.OPEN) return;
         // A page coming back to a session that's gone gets a new one, and a
@@ -332,13 +415,16 @@ export function attach(
         current = new Session(socket);
         current.send({ session: current.id });
         try {
-          current.program = session(program, { flags: value, ports, log, send: (out) => current.send(out) });
+          current.program = session(program, { flags: value, restore: saved, ports, log, send: (out) => current.send(out) });
         } catch (error) {
           live.delete(current.id);
           current = null;
           throw error;
         }
-        info(`Jorn: ${current.name} started${join.session ? ", in place of one that had ended" : ""}`);
+        if (saved !== undefined) await forget(join.session);
+        info(
+          `Jorn: ${current.name} started${saved !== undefined ? " from a session saved before a restart" : join.session ? ", in place of one that had ended" : ""}`,
+        );
       } catch (error) {
         log.error(`Jorn: couldn't start a session: ${error?.message ?? error}`);
         refuse(1011, "The session couldn't start");
@@ -355,15 +441,25 @@ export function attach(
       return live.size;
     },
 
-    /** Stop accepting pages, and end every session. */
-    close() {
+    /**
+     * Stop accepting pages, and end every session. With `snapshots`, each
+     * resumable session's model is saved first.
+     */
+    async close() {
       server.off("upgrade", upgrade);
       clearInterval(pulse);
+      if (snapshots) await save();
       for (const current of [...live.values()]) current.end("the server is closing");
       for (const socket of sockets.clients) socket.terminate();
       return new Promise((resolve) => sockets.close(() => resolve()));
     },
   };
+}
+
+// A promise's value, or undefined if it takes longer than `ms`.
+function within(ms, promise) {
+  let timer;
+  return Promise.race([promise, new Promise((resolve) => (timer = setTimeout(resolve, ms)))]).finally(() => clearTimeout(timer));
 }
 
 function sameOrigin(origin, request) {

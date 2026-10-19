@@ -510,6 +510,9 @@ export function start(program, container, { flags, effects = {}, ports = {} } = 
 
   function receive(message) {
     if (!running) return;
+    // A Jorn.resumable program waits to hear whether it's picking up a saved
+    // session. Only a server keeps those, so here it's always a fresh start.
+    if (message.ready) into.send({ fresh: true });
     draw(jorn, message, () => into.send({ painted: true }));
     if (message.frame) nextFrame(() => running && into.send({ frame: true }));
     if (message.error) console.warn(`Jorn: ${message.error}`);

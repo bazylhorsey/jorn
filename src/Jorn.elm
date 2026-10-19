@@ -1,6 +1,6 @@
 module Jorn exposing
     ( Program, Ports
-    , simple, application
+    , simple, application, resumable
     , State, Message
     )
 
@@ -49,7 +49,7 @@ server, and focus, scrolling and `Effect.client` run in the page.
 
 # Starting
 
-@docs simple, application
+@docs simple, application, resumable
 
 
 # Internals
@@ -101,6 +101,7 @@ type State model msg
         , painting : List msg
         , instructions : List Value
         , running : Bool
+        , held : Maybe (Effect msg)
         }
 
 
@@ -147,16 +148,82 @@ application :
     }
     -> Program flags model msg
 application config =
+    program
+        { init = config.init
+        , update = config.update
+        , view = config.view
+        , subscriptions = config.subscriptions
+        , ports = config.ports
+        , snapshots = Nothing
+        }
+
+
+{-| An `application` whose sessions survive a restart of the server, for
+example a deploy. When `attach` in `server/jorn.js` has somewhere to keep
+them, it saves each session's model with `encode` before the server stops.
+A page that comes back after the restart gets its model again, read by
+`decoder` from the new version of your code, and carries on where it was.
+
+    main : Jorn.Program () Model Msg
+    main =
+        Jorn.resumable
+            { init = init
+            , update = update
+            , view = view
+            , subscriptions = subscriptions
+            , ports = { toJorn = toJorn, fromJorn = fromJorn }
+            , encode = encodeModel
+            , decoder = modelDecoder
+            }
+
+If `decoder` can't read a saved model, because the model changed in a way it
+doesn't handle, the page starts over from `init` and the server logs why.
+
+A session that picks up a saved model doesn't run `init`, so neither do its
+effects. Anything that was in flight when the server stopped, like an HTTP
+request, is lost, so keep what you'd need to retry in the model.
+
+In the page, a resumable app runs like any other.
+
+-}
+resumable :
+    { init : flags -> ( model, Effect msg )
+    , update : msg -> model -> ( model, Effect msg )
+    , view : model -> Element msg
+    , subscriptions : model -> Sub msg
+    , ports : Ports msg
+    , encode : model -> Value
+    , decoder : Decode.Decoder model
+    }
+    -> Program flags model msg
+resumable config =
+    program
+        { init = config.init
+        , update = config.update
+        , view = config.view
+        , subscriptions = config.subscriptions
+        , ports = config.ports
+        , snapshots = Just { encode = config.encode, decoder = config.decoder }
+        }
+
+
+program : Config flags model msg -> Program flags model msg
+program config =
     Platform.worker
         { init = \flags -> start config flags
         , update = step config
         , subscriptions =
             \(State state) ->
-                if state.running then
-                    Sub.batch [ config.ports.fromJorn FromClient, Sub.map Got (config.subscriptions state.model) ]
+                case ( state.running, state.held ) of
+                    ( False, _ ) ->
+                        Sub.none
 
-                else
-                    Sub.none
+                    ( True, Just _ ) ->
+                        -- Nothing of the app's runs until it's started.
+                        config.ports.fromJorn FromClient
+
+                    ( True, Nothing ) ->
+                        Sub.batch [ config.ports.fromJorn FromClient, Sub.map Got (config.subscriptions state.model) ]
         }
 
 
@@ -166,6 +233,7 @@ type alias Config flags model msg =
     , view : model -> Element msg
     , subscriptions : model -> Sub msg
     , ports : Ports msg
+    , snapshots : Maybe { encode : model -> Value, decoder : Decode.Decoder model }
     }
 
 
@@ -179,22 +247,37 @@ start config flags =
             config.view model
 
         initial =
-            State
-                { model = model
-                , screen = screen
-                , frameRequested = False
-                , beforePaint = []
-                , afterPaint = []
-                , painting = []
-                , instructions = []
-                , running = True
-                }
-
-        ( state, cmd ) =
-            perform config effect initial
+            { model = model
+            , screen = screen
+            , frameRequested = False
+            , beforePaint = []
+            , afterPaint = []
+            , painting = []
+            , instructions = []
+            , running = True
+            , held = Nothing
+            }
     in
-    ( state
-    , Cmd.batch [ send config "mount" (Jorn.Patch.encodeHtml screen), cmd ]
+    case config.snapshots of
+        Nothing ->
+            mount config effect (State initial)
+
+        Just _ ->
+            -- The host says whether this is a fresh start or a saved session,
+            -- and until then `init`'s effects wait.
+            ( State { initial | held = Just effect }, send config "ready" (Encode.bool True) )
+
+
+{-| Show the view and start the effects.
+-}
+mount : Config flags model msg -> Effect msg -> State model msg -> ( State model msg, Cmd (Message msg) )
+mount config effect ((State s) as state) =
+    let
+        ( next, cmd ) =
+            perform config effect state
+    in
+    ( next
+    , Cmd.batch [ send config "mount" (Jorn.Patch.encodeHtml s.screen), cmd ]
     )
 
 
@@ -204,11 +287,32 @@ step config message ((State s) as state) =
         ( state, Cmd.none )
 
     else
-        case message of
-            Got msg ->
+        case ( message, s.held ) of
+            ( FromClient value, Just effect ) ->
+                case Decode.decodeValue incoming value of
+                    Ok Fresh ->
+                        mount config effect (State { s | held = Nothing })
+
+                    Ok (Restore saved) ->
+                        restore config effect saved (State { s | held = Nothing })
+
+                    Ok Shutdown ->
+                        ( State { s | running = False }, Cmd.none )
+
+                    Ok Snapshot ->
+                        ( state, send config "snapshot" Encode.null )
+
+                    _ ->
+                        -- There's no view on the page yet for anything else.
+                        ( state, Cmd.none )
+
+            ( Got _, Just _ ) ->
+                ( state, Cmd.none )
+
+            ( Got msg, Nothing ) ->
                 updateWith config msg state
 
-            FromClient value ->
+            ( FromClient value, Nothing ) ->
                 case Decode.decodeValue incoming value of
                     Ok (Event event) ->
                         case Routing.route event s.screen of
@@ -237,13 +341,79 @@ step config message ((State s) as state) =
                     Ok Shutdown ->
                         ( State { s | running = False }, Cmd.none )
 
+                    Ok Snapshot ->
+                        ( state
+                        , send config "snapshot" (Maybe.withDefault Encode.null (Maybe.map (\{ encode } -> encode s.model) config.snapshots))
+                        )
+
+                    Ok Fresh ->
+                        ( state, Cmd.none )
+
+                    Ok (Restore _) ->
+                        ( state, Cmd.none )
+
                     Err problem ->
                         ( state, send config "error" (Encode.string (Decode.errorToString problem)) )
 
 
+{-| Carry on from a saved model, or start over from `init` if this version's
+decoder can't read it.
+-}
+restore : Config flags model msg -> Effect msg -> Value -> State model msg -> ( State model msg, Cmd (Message msg) )
+restore config effect saved ((State s) as state) =
+    case Maybe.map (\{ decoder } -> Decode.decodeValue decoder saved) config.snapshots of
+        Just (Ok model) ->
+            mount config Jorn.Effect.none (State { s | model = model, screen = config.view model })
+
+        Just (Err problem) ->
+            mount config effect state
+                |> Tuple.mapSecond
+                    (\cmd ->
+                        Cmd.batch
+                            [ send config "error" (Encode.string ("Couldn't read the saved session, so it started over. " ++ describe "" problem))
+                            , cmd
+                            ]
+                    )
+
+        Nothing ->
+            mount config effect state
+
+
+{-| Where a decoder failed and why, leaving out the value, which could be
+large or private.
+-}
+describe : String -> Decode.Error -> String
+describe path problem =
+    let
+        at =
+            if String.isEmpty path then
+                ""
+
+            else
+                "At " ++ path ++ ": "
+    in
+    case problem of
+        Decode.Field field next ->
+            describe (path ++ "." ++ field) next
+
+        Decode.Index index next ->
+            describe (path ++ "[" ++ String.fromInt index ++ "]") next
+
+        Decode.OneOf [ only ] ->
+            describe path only
+
+        Decode.OneOf problems ->
+            at ++ "none of these worked: " ++ String.join " Or: " (List.map (describe "") problems)
+
+        Decode.Failure message _ ->
+            at ++ message
+
+
 {-| What the page sends: an event, the animation frame we asked for, word
 that the last patches are on the page, a request for the whole view because
-the page lost track of it, or a request to stop.
+the page lost track of it, or a request to stop. A resumable program also
+hears whether to start fresh or from a saved model, and requests for its
+model to save.
 -}
 type Incoming
     = Event Routing.Incoming
@@ -251,6 +421,9 @@ type Incoming
     | Painted
     | Remount
     | Shutdown
+    | Fresh
+    | Restore Value
+    | Snapshot
 
 
 incoming : Decode.Decoder Incoming
@@ -261,6 +434,9 @@ incoming =
         , Decode.field "painted" (Decode.succeed Painted)
         , Decode.field "remount" (Decode.succeed Remount)
         , Decode.field "shutdown" (Decode.succeed Shutdown)
+        , Decode.field "fresh" (Decode.succeed Fresh)
+        , Decode.field "restore" (Decode.map Restore Decode.value)
+        , Decode.field "snapshot" (Decode.succeed Snapshot)
         ]
 
 
