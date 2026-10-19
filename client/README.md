@@ -37,7 +37,7 @@ app.close(); // disconnect and empty the container
 
 A relative address is resolved against the page, and `http` becomes `ws`. `csrfToken` goes to the server's `authorize` check.
 
-If the connection drops, the page reconnects, backing off up to five seconds between tries, and picks up its session where it left off: the server sends what it missed, or the whole view if that's too much. If a patch doesn't fit the page, because something else changed the DOM, the page asks for the whole view. Clicks and other events during a disconnect are lost, but anything typed stays in its field. Style the waiting state with the container's `data-jorn-connection` attribute, which is `connecting`, `open`, `reconnecting` or `closed`:
+If the connection drops, the page reconnects, backing off up to five seconds between tries, and picks up its session where it left off: the server sends what it missed, or the whole view if that's too much. If a patch doesn't fit the page, because something else changed the DOM, the page asks for the whole view. Clicks and other events during a disconnect are lost, but anything typed stays in its field. If the page has to start a new session, for example because the server restarted, it sends its flags again. Pass `flags` as a function to send what's current rather than what was there when the page loaded. Style the waiting state with the container's `data-jorn-connection` attribute, which is `connecting`, `open`, `reconnecting` or `closed`:
 
 ```css
 [data-jorn-connection="reconnecting"] { opacity: 0.5; pointer-events: none; }

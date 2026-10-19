@@ -543,7 +543,9 @@ export function start(program, container, { flags, effects = {}, ports = {} } = 
  *
  * A relative `url` is resolved against the page's address, and `http` and
  * `https` become `ws` and `wss`. `csrfToken` goes to the server with
- * `flags`, for its `authorize` check.
+ * `flags`, for its `authorize` check. `flags` can be a function, called each
+ * time the page connects, so a fresh session after a reconnect starts from
+ * what's current.
  *
  * If the connection drops, the page reconnects, backing off up to five
  * seconds between tries, and picks up its session where it left off.
@@ -553,7 +555,7 @@ export function start(program, container, { flags, effects = {}, ports = {} } = 
  *
  * @param {Element} container
  * @param {string | URL} url
- * @param {{ flags?: unknown, csrfToken?: string, effects?: Record<string, Function>, heartbeat?: number }} options
+ * @param {{ flags?: unknown | (() => unknown), csrfToken?: string, effects?: Record<string, Function>, heartbeat?: number }} options
  */
 export function stream(container, url, { flags, csrfToken, effects = {}, heartbeat = 30_000 } = {}) {
   const view = container?.ownerDocument?.defaultView;
@@ -588,7 +590,7 @@ export function stream(container, url, { flags, csrfToken, effects = {}, heartbe
     status(attempt ? "reconnecting" : "connecting");
     const current = (socket = new Socket(address.href));
     current.addEventListener("open", () => {
-      post({ join: { protocol: 0, flags, csrfToken, session: session ?? undefined, seen } });
+      post({ join: { protocol: 0, flags: typeof flags === "function" ? flags() : flags, csrfToken, session: session ?? undefined, seen } });
       status("open");
       attempt = 0;
       heard = true;
