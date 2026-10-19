@@ -14,9 +14,15 @@
 //
 // `session` is the part underneath: one running program and no transport,
 // for hosts that move the messages themselves.
+//
+// elm/http needs XMLHttpRequest, so the first session defines the one in
+// http.js globally if the process has none.
 
 import { randomUUID } from "node:crypto";
 import { WebSocketServer } from "ws";
+import { XMLHttpRequest } from "./http.js";
+
+export { XMLHttpRequest };
 
 // The version of the server mode messages in PROTOCOL.md. A page that speaks
 // another one is turned away instead of half working.
@@ -42,6 +48,7 @@ export function session(program, { send, flags, ports = {}, log = console } = {}
     throw new TypeError("Jorn: session needs a send function");
   }
   const { toJorn = "toJorn", fromJorn = "fromJorn" } = ports;
+  globalThis.XMLHttpRequest ??= XMLHttpRequest;
   const app = program.init(flags === undefined ? {} : { flags });
   const out = app.ports?.[toJorn];
   const into = app.ports?.[fromJorn];

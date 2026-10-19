@@ -11,7 +11,7 @@ jobs:
         with:
           node-version: 22
       - run: npm install --no-save elm@0.19.1-6 elm-test@0.19.1-revision15 elm-format@0.8.8
-      - run: npx elm-format --validate src tests examples client/test/elm/src
+      - run: npx elm-format --validate src tests examples client/test/elm/src server/test/elm/src
       - run: npx elm make --docs=docs.json
       - run: npx elm-test --fuzz 1000
 
@@ -53,6 +53,8 @@ jobs:
         working-directory: client/test/elm
       - run: $GITHUB_WORKSPACE/node_modules/.bin/elm make src/Main.elm --output=build/main.js
         working-directory: examples/todos
+      - run: $GITHUB_WORKSPACE/node_modules/.bin/elm make src/HttpSpec.elm --optimize --output=build/http.js
+        working-directory: server/test/elm
       - run: npm ci
         working-directory: server
       - run: npm ci
@@ -64,6 +66,12 @@ jobs:
         working-directory: server/test
       - name: Reconnects, heartbeats and limits
         run: node reconnect.mjs
+        working-directory: server/test
+      - name: XMLHttpRequest for elm/http
+        run: node http.mjs
+        working-directory: server/test
+      - name: elm/http in a server component
+        run: node http-elm.mjs
         working-directory: server/test
       - name: Todos example on a server
         run: node example.mjs server

@@ -36,7 +36,8 @@ effect:
 
 In client mode all three run in the browser. In server mode, commands and
 paint timing run on the server, and patcher instructions go to the page over
-the socket.
+the socket. Commands then use the server's clock, time zone and network, so
+HTTP requests need absolute URLs and carry no cookies.
 
 
 # Effects
