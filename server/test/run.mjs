@@ -8,7 +8,7 @@ import { JSDOM } from "jsdom";
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import { WebSocket } from "ws";
-import { stream } from "../../client/jorn.js";
+import { defineServerComponent, stream } from "../../client/jorn.js";
 import { attach, session } from "../jorn.js";
 
 const require = createRequire(import.meta.url);
@@ -117,6 +117,13 @@ const port = server.address().port;
 const origin = `http://127.0.0.1:${port}`;
 
 const app = attach(server, { path: "/app", program: Elm.RuntimeSpec, flags: ({ page }) => page, log });
+const guarded = attach(server, {
+  path: "/guarded",
+  program: Elm.RuntimeSpec,
+  flags: () => 1,
+  authorize: ({ csrfToken }) => csrfToken === "secret",
+  log,
+});
 const broken = attach(server, {
   path: "/broken",
   program: Elm.RuntimeSpec,
@@ -174,6 +181,54 @@ const broken = attach(server, {
   other.window.close();
 }
 
+// ---- <jorn-server-component> ----------------------------------------------------
+
+{
+  const { window } = new JSDOM(
+    `<!doctype html><html><body>
+      <div id=outer><jorn-server-component id=one route="/app" flags="4"></jorn-server-component></div>
+      <div id=elsewhere></div>
+    </body></html>`,
+    { url: `${origin}/` },
+  );
+  const { document } = window;
+  const recorded = [];
+  const opened = [];
+  document.addEventListener("opened", (event) => opened.push(event.detail));
+  defineServerComponent({ window, effects: { record: (payload) => recorded.push(payload) } });
+  defineServerComponent({ window });
+  check(true, "defining twice is harmless");
+
+  const host = document.getElementById("one");
+  const $ = (id) => host.querySelector(`#${id}`);
+  await until(() => $("increment")?.textContent === "4", "the element streams its route with its flags");
+  $("increment").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await until(() => $("increment").textContent === "5", "events from inside the element");
+
+  $("open").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await until(() => opened.length === 1, "Effect.event bubbles out of the element");
+  check(JSON.stringify(opened) === "[5]" && JSON.stringify(recorded) === '["opened"]', "and the defined effects run", { opened, recorded });
+
+  // Moved by removing and adding back, as a keyed list without moveBefore
+  // does: still the same session.
+  const sessions = app.sessions;
+  document.getElementById("elsewhere").appendChild(host);
+  await wait(50);
+  check(app.sessions === sessions && $("increment")?.textContent === "5", "moving the element keeps its session", { sessions: app.sessions });
+
+  host.remove();
+  await until(() => app.sessions === sessions - 1, "removing the element ends its session");
+
+  // An element made later, the way a Jorn app makes it.
+  const later = document.createElement("jorn-server-component");
+  later.setAttribute("route", "/guarded");
+  later.setAttribute("csrf-token", "secret");
+  document.body.appendChild(later);
+  await until(() => later.querySelector("#increment")?.textContent === "1", "the csrf token reaches authorize");
+  later.remove();
+  window.close();
+}
+
 // ---- Refusals ----------------------------------------------------------------------
 
 function connectRaw(path, options = {}) {
@@ -200,6 +255,10 @@ function closed(socket) {
   garbled.on("open", () => garbled.send("not json"));
   check((await closed(garbled)).code === 1007, "a message that isn't JSON closes the socket");
 
+  const forged = connectRaw("/guarded");
+  forged.on("open", () => forged.send(JSON.stringify({ join: { protocol: 0, csrfToken: "guess" } })));
+  check((await closed(forged)).code === 1008, "a page authorize turns down is closed");
+
   const failing = connectRaw("/broken");
   failing.on("open", () => failing.send(JSON.stringify({ join: { protocol: 0 } })));
   check((await closed(failing)).code === 1011, "a session that can't start closes the socket");
@@ -218,6 +277,7 @@ function closed(socket) {
 
 await app.close();
 await broken.close();
+await guarded.close();
 await new Promise((resolve) => server.close(resolve));
 
 if (failed) {

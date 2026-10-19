@@ -106,13 +106,15 @@ export function session(program, { send, flags, ports = {}, log = console } = {}
  *
  * Browsers attach cookies to websockets from any site, so only pages from the
  * server's own origin may connect, unless `origins` lists others. Clients that
- * aren't browsers send no origin and are let in.
+ * aren't browsers send no origin and are let in. For more, `authorize` gets
+ * the request and the page's `csrfToken` before anything starts, and turns the
+ * page away if it returns false.
  *
  * @param {import("node:http").Server} server
- * @param {{ program: object, path?: string, flags?: (context: { request: import("node:http").IncomingMessage, page: unknown }) => unknown, origins?: string[], ports?: { toJorn?: string, fromJorn?: string }, maxPayload?: number, log?: Pick<Console, "warn" | "error"> }} options
+ * @param {{ program: object, path?: string, flags?: (context: { request: import("node:http").IncomingMessage, page: unknown }) => unknown, authorize?: (context: { request: import("node:http").IncomingMessage, csrfToken: string | undefined }) => boolean | Promise<boolean>, origins?: string[], ports?: { toJorn?: string, fromJorn?: string }, maxPayload?: number, log?: Pick<Console, "warn" | "error"> }} options
  * @returns {{ readonly sessions: number, close: () => Promise<void> }}
  */
-export function attach(server, { program, path = "/", flags, origins = [], ports, maxPayload = 1 << 20, log = console } = {}) {
+export function attach(server, { program, path = "/", flags, authorize, origins = [], ports, maxPayload = 1 << 20, log = console } = {}) {
   if (!program || typeof program.init !== "function") {
     throw new TypeError("Jorn: attach needs a compiled program, like Elm.Main");
   }
@@ -156,6 +158,11 @@ export function attach(server, { program, path = "/", flags, origins = [], ports
       }
       joined = true;
       try {
+        const csrfToken = typeof join.csrfToken === "string" ? join.csrfToken : undefined;
+        if (authorize && !(await authorize({ request, csrfToken }))) {
+          socket.close(1008, "Not allowed");
+          return;
+        }
         const value = flags ? await flags({ request, page: join.flags }) : undefined;
         if (socket.readyState !== socket.OPEN) return;
         // Nothing the page sends before its first mount can refer to it, so

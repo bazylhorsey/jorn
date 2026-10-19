@@ -13,7 +13,8 @@
         "Jorn.Element.Svg",
         "Jorn.Effect",
         "Jorn.Event",
-        "Jorn.Patch"
+        "Jorn.Patch",
+        "Jorn.ServerComponent"
     ],
     "elm-version": "0.19.0 <= v < 0.20.0",
     "dependencies": {
