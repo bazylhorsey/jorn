@@ -8,6 +8,8 @@
 //    Then fire every event on every element and check that exactly the
 //    elements with a handler report it, with the right preventDefault, and
 //    that the event router sends each report back to the handler on that element.
+//    And each of A, B and C as an HTML string must be exactly what the
+//    browser's innerHTML gives once it's mounted.
 //
 // Usage: node client/test/run.mjs [cases] [seed]
 // Build first: cd client/test/elm && elm make src/ClientSpec.elm --optimize --output=build/spec.js
@@ -717,6 +719,15 @@ for (let caseId = 0; caseId < cases.length; caseId++) {
     if (afterC !== wantC) fail("B->C differs from C", { caseId, got: afterC, want: wantC, patches: c.bc });
     if (container.childNodes.length !== 1) fail("container holds more than the root", { caseId });
 
+    for (const [i, node] of [c.a, c.b, c.c].entries()) {
+      const mounted = setup();
+      mounted.jorn.mount(node);
+      if (c.html[i] !== mounted.container.innerHTML) {
+        fail("an HTML string isn't what the browser serializes once mounted", { caseId, view: "ABC"[i], string: c.html[i], mounted: mounted.container.innerHTML });
+      }
+      mounted.container.remove();
+    }
+
     if (afterC !== wantC) continue; // already reported above
     const nodes = elementsOf(c.c);
     const doms = domElementsOf(container.firstChild, c.c);
@@ -757,4 +768,4 @@ if (failed) {
   for (const f of failures) console.log(JSON.stringify(f, null, 2).slice(0, 3000));
   process.exit(1);
 }
-console.log("PASSED: the patcher turns every A into C exactly, and every event routes home.");
+console.log("PASSED: the patcher turns every A into C exactly, every event routes home, and every view's HTML string is what the page serializes.");

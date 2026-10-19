@@ -4,6 +4,7 @@ module Jorn.Element exposing
     , none, fragment
     , advanced, Closing(..)
     , unsafeRawHtml
+    , toString, toDocumentString, toReadableString
     )
 
 {-| A pure Elm virtual DOM. Unlike `elm/html`, these values are ordinary data,
@@ -35,9 +36,15 @@ patches to one.
 
 @docs unsafeRawHtml
 
+
+# HTML strings
+
+@docs toString, toDocumentString, toReadableString
+
 -}
 
 import Jorn.Attribute exposing (Attribute)
+import Jorn.Internal.Html as Html
 import Jorn.Internal.Vdom as Vdom
 
 
@@ -148,6 +155,71 @@ has no handlers of its own, and when the HTML changes, it's replaced as a whole.
 unsafeRawHtml : String -> String -> List (Attribute msg) -> String -> Element msg
 unsafeRawHtml namespace tag attributes html =
     Vdom.Raw namespace tag attributes html
+
+
+{-| A view as HTML, written the way the browser's `innerHTML` writes the
+mounted view, so a page can show it before any script runs.
+
+    Element.toString (Html.p [ Attribute.class "note" ] [ Element.text "1 < 2" ])
+    --> "<p class=\"note\">1 &lt; 2</p>"
+
+Text and attribute values are escaped, and void elements like `br` have no
+closing tag. A fragment as the whole of a view renders the way it mounts (see
+`fragment`).
+
+Handlers don't appear, and neither do properties, which HTML can't express,
+except `defaultValue`, `defaultChecked` and `defaultSelected`, which the
+browser reflects into the `value`, `checked` and `selected` attributes. A
+`textarea`'s `value` is written as its content, where HTML keeps it, rather
+than as an attribute.
+
+Text inside an HTML `script` or `style` isn't escaped, since the browser
+reads it as it is; any `</` in it is written `<\/` so it can't close the
+element early. Raw HTML from `unsafeRawHtml` is written as it is. A tag or
+attribute name the browser would refuse, such as one with a space or a quote
+in it, is left out.
+
+-}
+toString : Element msg -> String
+toString =
+    Html.toString
+
+
+{-| `toString` with `<!doctype html>` in front, for a whole page:
+
+    Element.toDocumentString
+        (Html.html []
+            [ Html.head [] [ Html.title [] [ Element.text "Jorn" ] ]
+            , Html.body [] [ Element.text "Hello" ]
+            ]
+        )
+    --> "<!doctype html><html><head><title>Jorn</title></head><body>Hello</body></html>"
+
+-}
+toDocumentString : Element msg -> String
+toDocumentString =
+    Html.toDocumentString
+
+
+{-| `toString`, with one node per line and children indented under their
+parent, for tests and debugging. An element that's empty, or holds only a
+line of text, stays on one line:
+
+    Html.ul []
+        [ Html.li [] [ Element.text "One" ]
+        , Html.li [] [ Element.text "Two" ]
+        ]
+        |> Element.toReadableString
+
+    --> "<ul>\n  <li>One</li>\n  <li>Two</li>\n</ul>"
+
+The indentation adds whitespace between nodes, so the result isn't the same
+HTML. Use `toString` for pages.
+
+-}
+toReadableString : Element msg -> String
+toReadableString =
+    Html.toReadableString
 
 
 {-| How an element's tags are written as HTML. Only rendering to a string is

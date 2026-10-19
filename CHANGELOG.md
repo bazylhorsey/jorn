@@ -4,6 +4,7 @@
 
 - `Jorn.Element.MathMl` has a function for every MathML Core element, in the MathML namespace (#14).
 - `Element.unsafeRawHtml` makes an element whose content is a string of HTML, for content like rendered Markdown (#12). The HTML is set as the element's `innerHTML` without being escaped. The element's own attributes and handlers diff as usual, and new HTML replaces the old as a whole, with a new `set-html` patch. A raw node has `html` in place of `children` on the wire, and the patcher refuses any patch aimed inside it.
+- `Element.toString` renders a view as HTML, written the way the browser's `innerHTML` writes the mounted view (#15). `toDocumentString` adds `<!doctype html>`, and `toReadableString` indents it for tests and debugging. Text and attribute values are escaped, handlers and properties are left out except the default values the browser reflects into attributes, and tag or attribute names the browser would refuse are dropped. The client tests check every random view's string against jsdom's serialization of the mounted view.
 
 ## v0.2 (2026-10-19)
 
