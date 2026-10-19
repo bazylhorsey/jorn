@@ -74,7 +74,7 @@ An `id` that matches nothing, or a `client` name nobody registered, is reported 
 { "path": [1, 0], "name": "input", "event": { "target": { "value": "hi" } } }
 ```
 
-The client applies `preventDefault` and `stopPropagation` synchronously from the listener's options, then builds `event` from the dotted paths in `include`, skipping any path that goes through `__proto__`, `constructor` or `prototype`. When Elm runs in the same page (client mode), the client can pass the live event object instead, and `include` doesn't matter. Events the browser fires as a result of applying patches, like the `blur` some browsers send when a patch removes the focused element, are not reported. In client mode, `Jorn.application` routes each event to the handler that produced it. Routing for hosts that do it themselves, like a server, lives in `Jorn.Internal.Event` for now and becomes public with the server runtime.
+The client applies `preventDefault` and `stopPropagation` synchronously from the listener's options, then builds `event` from the dotted paths in `include`, skipping any path that goes through `__proto__`, `constructor` or `prototype`. When Elm runs in the same page (client mode), the client can pass the live event object instead, and `include` doesn't matter. Events the browser fires as a result of applying patches, like the `blur` some browsers send when a patch removes the focused element, are not reported. In client mode, `Jorn.application` routes each event to the handler that produced it. Routing for hosts that do it themselves lives in `Jorn.Internal.Event` for now and becomes public with the server component API.
 
 ## Client mode runtime
 
@@ -99,6 +99,27 @@ Page to program, on `fromJorn`:
 | `{ "shutdown": true }` | Stop, and ignore everything after |
 
 The program asks for a frame only when something changed, and every message that arrives before the frame is handled before its one diff, so a burst of events costs one render.
+
+## Server mode
+
+The same program can run on a server instead, in `server/jorn.js`, with `stream` from `client/jorn.js` on the page. The program's messages are the ones above. The server answers `frame` itself, at most once every 16 ms, and logs `error`, so neither goes over the wire. Everything else travels as one JSON text message per websocket message.
+
+Page to server:
+
+| Message | Server behavior |
+|---|---|
+| `{ "join": { "protocol": 0, "flags": ... } }` | Must be first. Start a session for this page. `flags` is optional, and the server decides whether to use it |
+| `{ "event": { "path", "name", "event" } }` | Pass it to the program. `event` holds only the fields in the handler's `include` |
+| `{ "painted": true }` | Pass it to the program |
+
+Anything else from the page is ignored. Server to page:
+
+| Message | Page behavior |
+|---|---|
+| `{ "mount": node }` | Render the first view |
+| `{ "patches": [...], "instructions": [...], "painted": bool }` | As in client mode: apply, run, and send `{ "painted": true }` back if asked |
+
+The server closes the socket with 1002 if the first message isn't a `join` for a protocol it speaks, 1007 if a message isn't JSON, and 1011 if the session can't start. Closing the socket ends the session.
 
 ## Semantics worth knowing
 

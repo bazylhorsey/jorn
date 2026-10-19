@@ -34,9 +34,9 @@ effect:
   - **Paint timing**: `beforePaint` and `afterPaint` send your `update` a
     message around the next render.
 
-In client mode all three run in the browser. Server mode (coming with the
-server runtime) will run commands on the server and send patcher
-instructions over the socket.
+In client mode all three run in the browser. In server mode, commands and
+paint timing run on the server, and patcher instructions go to the page over
+the socket.
 
 
 # Effects

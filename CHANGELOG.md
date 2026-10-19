@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Server mode (#19). `server/jorn.js` runs a `Jorn.simple` or `Jorn.application` program on Node, one instance per connected page, and `stream` in `client/jorn.js` shows it in the page over a websocket. The program doesn't change: commands run on the server, and patcher instructions and `Effect.client` run in the page. `attach` serves a program on a path of an HTTP server, only to pages from the same origin unless you list others, and `session` runs one instance for hosts that move the messages themselves. The socket messages are specified in PROTOCOL.md.
+- `examples/serve.mjs` also runs the todos app on the server, at `examples/todos/server.html`. CI runs the todos checks in both modes.
 - The patcher ignores property names and event fields that lead to a prototype (`__proto__`, `constructor`, `prototype`). Setting `__proto__` on an element used to replace its prototype and break the page. A path step that isn't a child index is now a protocol error.
 - CI runs with a read-only token.
 

@@ -1,0 +1,10 @@
+{
+  "name": "jorn-server-test",
+  "private": true,
+  "scripts": {
+    "test": "node run.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "26.1.0"
+  }
+}

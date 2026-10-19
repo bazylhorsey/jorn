@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Jorn todos, on the server</title>
+    <style>
+      body { font: 18px/1.5 system-ui, sans-serif; margin: 3rem auto; max-width: 30rem; padding: 0 1rem; }
+      header { display: flex; align-items: center; justify-content: space-between; }
+      input:not([type]) { font: inherit; width: 100%; box-sizing: border-box; padding: 0.4rem 0.6rem; }
+      ul { list-style: none; padding: 0; }
+      li { display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0; border-bottom: 1px solid #ddd; }
+      li label { flex: 1; display: flex; align-items: center; gap: 0.5rem; }
+      li form { flex: 1; }
+      li.done label { color: #888; text-decoration: line-through; }
+      button { font: inherit; }
+      footer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+      [aria-pressed="true"] { font-weight: bold; }
+      .progress { width: 2.5rem; }
+      .progress circle { fill: none; stroke-width: 4; }
+      .progress .track { stroke: #ddd; }
+      .progress .fill { stroke: #2a7; transition: stroke-dasharray 0.3s; }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <script type="module">
+      import { stream } from "../../client/jorn.js";
+
+      const key = "jorn-todos";
+
+      // The same app as index.html, running on the server instead of here.
+      // This page only draws it and keeps the list in localStorage.
+      stream(document.getElementById("app"), "socket", {
+        flags: JSON.parse(localStorage.getItem(key) ?? "[]"),
+        effects: {
+          save: (todos) => localStorage.setItem(key, JSON.stringify(todos)),
+        },
+      });
+    </script>
+  </body>
+</html>

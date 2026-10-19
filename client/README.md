@@ -19,9 +19,26 @@ app.shutdown(); // stop the program and empty the container
 
 The program has to declare two ports, `toJorn` and `fromJorn` (see the `Jorn` module). If yours have other names, pass `ports: { toJorn: "...", fromJorn: "..." }`.
 
+## Showing an app that runs on a server
+
+When the same program runs on a server with [server/jorn.js](../server), `stream` connects the page to it:
+
+```js
+import { stream } from "./jorn.js";
+
+const app = stream(document.getElementById("app"), "/app", {
+  flags: { theme: "dark" },                           // sent to the server, which decides whether to use them
+  effects: { copy: (text) => navigator.clipboard.writeText(text) }, // Effect.client still runs here
+});
+
+app.close(); // disconnect and empty the container
+```
+
+A relative address is resolved against the page, and `http` becomes `ws`. The page only applies patches and sends events back: `update`, `view` and commands run on the server, and focus, scrolling and `Effect.client` run here.
+
 ## Hosting a program yourself
 
-`connect` is the lower level: it applies what you give it and reports events, and you move the messages. It's what a server component's page uses, and what `start` is built on.
+`connect` is the lower level: it applies what you give it and reports events, and you move the messages. `start` and `stream` are built on it.
 
 ```js
 import { connect } from "./jorn.js";
@@ -38,7 +55,7 @@ jorn.patch(patches); // after every update, with the output of Jorn.Patch.encode
 
 ## Two modes
 
-- **Server mode** (the default). Events are reduced to plain JSON holding only the fields each handler asked for with `include`, so they can go over a socket.
+- **Server mode** (the default). Events are reduced to plain JSON holding only the fields each handler asked for with `include`, so they can go over a socket. `stream` uses this mode.
 - **Client mode**, `connect(container, { send, raw: true })`. Your Elm program runs in the same page, so `event` is the live event object and decoders can read anything on it. `start` uses this mode.
 
 ## API
@@ -46,6 +63,7 @@ jorn.patch(patches); // after every update, with the output of Jorn.Patch.encode
 | | |
 |---|---|
 | `start(program, container, { flags, effects, ports })` | Run a compiled Jorn program in `container`. Returns `{ shutdown() }`. |
+| `stream(container, url, { flags, effects })` | Show a program running on a server in `container`, over a websocket. Returns `{ close() }`. |
 | `connect(container, { send, raw, effects })` | Take over `container`. Its only child is the root of your view from here on. `effects` maps names to the functions `Effect.client` can call. |
 | `.mount(node)` | Render a whole tree, replacing whatever was there. |
 | `.patch(patches)` | Apply patches strictly in order. Throws on a patch that doesn't fit the page, which means the page and the server have drifted apart. |

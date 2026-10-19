@@ -49,7 +49,7 @@ Statuses: **done** is available today. **partial** is available with a stated di
 |---|---|---|
 | Mount (encode a whole tree) | done | `Jorn.Patch.encodeHtml` |
 | Diff and patch encoding | done | `Jorn.Patch`, specified in [PROTOCOL.md](PROTOCOL.md) |
-| Event decoding and routing | done | Built into the runtime. Public with the server runtime, for hosts that route events themselves. |
+| Event decoding and routing | done | Built into the runtime, in both modes. Public with the server component API, for hosts that route events themselves. |
 
 ## Runtime
 
@@ -58,7 +58,7 @@ Statuses: **done** is available today. **partial** is available with a stated di
 | App runtime (`init`, `update`, `view` programs) | done | `Jorn.simple` and `Jorn.application`, started in the page with `start` from `client/jorn.js`. One diff per animation frame, however many messages arrive. |
 | Effects (`Effect.none`, `batch`, `map`, ...) | done | `Jorn.Effect`: Elm commands, focus and scrolling, paint timing, custom events and named client effects. Contexts come with #28. |
 | Browser patcher (small JavaScript) | done | [client/jorn.js](client/jorn.js). Checked against [tests/Reference.elm](tests/Reference.elm)'s semantics with randomized diffs in `client/test/`. |
-| Server runtime over a websocket (Node, Bun, Deno) | todo | |
+| Server runtime over a websocket (Node, Bun, Deno) | partial | Node, in [server/jorn.js](server/jorn.js), with `stream` in the page. Reconnects come with #21, and Bun and Deno with #23. |
 | Components as custom elements (attributes, properties, slots, form association) | todo | |
 | Generated encoders for shared client/server types | todo | |
 | Session snapshots and typed migrations across deploys | todo | |
