@@ -40,10 +40,22 @@ Install the one dependency, [ws](https://github.com/websockets/ws), with `npm in
 
 ## What runs where
 
-- `update`, `view`, subscriptions and Elm commands (time, random, tasks) run on the server. HTTP comes with #22.
+- `update`, `view`, subscriptions and Elm commands (HTTP, time, random, tasks) run on the server. [Commands on the server](#commands-on-the-server) says what that changes.
 - Focus, blur, scrolling, `Effect.event` and `Effect.client` run in the page, right after the patches they arrived with. Register `Effect.client` functions with `stream`'s `effects`.
 - Messages that arrive close together are rendered once, at most once every 16 ms, so a burst of events costs one diff, as it does in the browser.
 - Event handlers only get the event fields they ask for with `Event.include`. The helpers in `Jorn.Event` already ask for what they decode.
+
+## Commands on the server
+
+Commands run where the program runs, so its requests, clock and randomness are the server's.
+
+- **HTTP** works through `elm/http` as it does in the page. `elm/http` needs the browser's `XMLHttpRequest`, so the first session defines one built on Node's `fetch` ([http.js](http.js)), unless the process already has one. The requests are made by your server, not the visitor's browser, which changes three things:
+  - URLs must be absolute. There's no page to resolve `/api/todos` against, so a relative URL fails with `Http.BadUrl`. Pass your API's address in the flags.
+  - Requests carry no cookies, so `Http.riskyRequest` is the same as `Http.request`. To call an API as the visitor, have `flags` take what you need from the request that opened the socket, and send it with `Http.header`.
+  - They can reach anything your server can, including addresses on your private network. Build URLs from values you trust, not from what a visitor typed.
+- **Time** is the server's. `Time.now` and `Time.every` work as usual, but `Time.here` gives the server's time zone. If your view shows local times, pass the page's offset in the flags (`-new Date().getTimezoneOffset()`, in minutes) and make a zone with `Time.customZone`.
+- **Random** works as usual, seeded from the server's clock.
+- `File.Select` and `File.Download` from `elm/file` need a page, so they don't work on the server. `Debug.log` prints on the server.
 
 ## Flags and security
 
@@ -84,9 +96,10 @@ Each session gets a number in the logs. `attach` logs to `log.info` when a sessi
 |---|---|
 | `attach(server, { program, path, flags, authorize, origins, ports, linger, replay, heartbeat, maxSessions, maxMessagesPerSecond, maxPayload, log })` | Serve `program` to pages that connect to `path` on an HTTP server. Leaves other paths alone. Returns `{ sessions, close() }`. |
 | `session(program, { send, flags, ports, log })` | Start one instance of `program` with no transport. Hand the page's messages to `.receive(message)` and call `.close()` when it goes away. For hosts that move the messages themselves. |
+| `XMLHttpRequest` | The one the first session defines for `elm/http` when the process has none. Set `globalThis.XMLHttpRequest` to it yourself if something needs it before then. |
 
 If your program's ports aren't called `toJorn` and `fromJorn`, pass `ports: { toJorn: "...", fromJorn: "..." }`.
 
 ## Tests
 
-`test/run.mjs` runs a session on its own, then pages in jsdom against a real server over real sockets: batching, every kind of effect, separate sessions, and the refusals. `test/reconnect.mjs` puts a TCP proxy between the pages and the server and silences or cuts it, including halfway through a patch, to check that pages resume, catch up, remount or start over, that heartbeats find silent connections, and that the limits hold. `client/test/example.mjs server` runs the todos example through it. See [CONTRIBUTING.md](../CONTRIBUTING.md) for how to run them.
+`test/run.mjs` runs a session on its own, then pages in jsdom against a real server over real sockets: batching, every kind of effect, separate sessions, and the refusals. `test/reconnect.mjs` puts a TCP proxy between the pages and the server and silences or cuts it, including halfway through a patch, to check that pages resume, catch up, remount or start over, that heartbeats find silent connections, and that the limits hold. `test/http.mjs` uses the `XMLHttpRequest` the way `elm/http` does, against a local HTTP server, and `test/http-elm.mjs` runs `elm/http` itself in a server component. `client/test/example.mjs server` runs the todos example on the server. See [CONTRIBUTING.md](../CONTRIBUTING.md) for how to run them.

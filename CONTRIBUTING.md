@@ -27,11 +27,12 @@ CI runs the same three, plus the browser patcher's, runtime's and server's tests
 (cd client/test && npm install && node run.mjs && node runtime.mjs && node example.mjs)
 ```
 
-If you touch `server/jorn.js` or `stream`, build `RuntimeSpec.elm` and the todos example as above, then run the server's tests and the todos example in server mode:
+If you touch `server/` or `stream`, build `RuntimeSpec.elm` and the todos example as above, and the server's HTTP test app, then run the server's tests and the todos example in server mode:
 
 ```
+(cd server/test/elm && ../../../node_modules/.bin/elm make src/HttpSpec.elm --optimize --output=build/http.js)
 (cd server && npm install)
-(cd server/test && npm install && node run.mjs && node reconnect.mjs)
+(cd server/test && npm install && node run.mjs && node reconnect.mjs && node http.mjs && node http-elm.mjs)
 (cd client/test && node example.mjs server)
 ```
 
@@ -43,6 +44,7 @@ If you touch `server/jorn.js` or `stream`, build `RuntimeSpec.elm` and the todos
 - `tests/Reference.elm` is an executable spec of the browser patcher: it applies patches to a tree in Elm, and the fuzz tests check that applying `diff a b` to `a` always gives `b`.
 - `examples/` holds runnable examples. Each is an Elm application that pulls in `../../src`, written the way an app using Jorn would be. `client/test/example.mjs` uses the todos example in jsdom.
 - `server/jorn.js` is the server runtime. `server/test/run.mjs` runs a session on its own, then pages in jsdom against a real server and real sockets. `server/test/reconnect.mjs` breaks those connections on purpose.
+- `server/http.js` is the `XMLHttpRequest` that elm/http uses on the server. `server/test/http.mjs` uses it the way elm/http does, against a local HTTP server, and `server/test/http-elm.mjs` runs elm/http itself in a server component.
 - `client/jorn.js` is the browser patcher. `client/test/run.mjs` checks it in jsdom: unit tests for live form state and events, then thousands of random view sequences generated in Elm, checking the DOM after every patch and routing every event back through `Jorn.Internal.Event`. `client/test/runtime.mjs` runs a small app through `Jorn.application` and `start`, checking batching and every kind of effect.
 
 ## Style

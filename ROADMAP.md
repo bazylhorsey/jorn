@@ -59,7 +59,7 @@ Statuses: **done** is available today. **partial** is available with a stated di
 | Effects (`Effect.none`, `batch`, `map`, ...) | done | `Jorn.Effect`: Elm commands, focus and scrolling, paint timing, custom events and named client effects. Contexts come with #28. |
 | Browser patcher (small JavaScript) | done | [client/jorn.js](client/jorn.js). Checked against [tests/Reference.elm](tests/Reference.elm)'s semantics with randomized diffs in `client/test/`. |
 | Server components in a page (`Jorn.ServerComponent.element`, `<jorn-server-component>`) | done | Connects while it's in the document, and keeps the connection when it moves. |
-| Server runtime over a websocket (Node, Bun, Deno) | partial | Node, in [server/jorn.js](server/jorn.js), with `stream` in the page. Pages reconnect to their sessions and catch up, and heartbeats and limits keep the server healthy. Bun and Deno come with #23. |
+| Server runtime over a websocket (Node, Bun, Deno) | partial | Node, in [server/jorn.js](server/jorn.js), with `stream` in the page. Pages reconnect to their sessions and catch up, heartbeats and limits keep the server healthy, and elm/http works on the server. Bun and Deno come with #23. |
 | Components as custom elements (attributes, properties, slots, form association) | todo | |
 | Generated encoders for shared client/server types | todo | |
 | Session snapshots and typed migrations across deploys | todo | |
