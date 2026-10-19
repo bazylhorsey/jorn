@@ -52,6 +52,7 @@ const short = attach(server, { ...common, path: "/short", replay: 1 });
 const brief = attach(server, { ...common, path: "/brief", linger: 50 });
 const limited = attach(server, { ...common, path: "/limited", maxSessions: 1, maxMessagesPerSecond: 50 });
 const patient = attach(server, { ...common, path: "/patient", heartbeat: 60_000 });
+const closing = attach(server, { ...common, path: "/closing" });
 
 // A TCP proxy between the pages and the server. `silence` stops bytes in
 // one or both directions without closing anything, `cut` kills every
@@ -236,6 +237,20 @@ function page(path, { flags = 3, heartbeat = 100 } = {}) {
   check(warnings.some((line) => line.includes("Asking the server for the whole view")), "and says so", { warnings });
   p.click("increment");
   await until(() => p.$("increment").textContent === "5", "and it keeps working");
+  p.app.close();
+  p.window.close();
+}
+
+// ---- Closing the server ----------------------------------------------------------
+
+{
+  const p = page("/closing");
+  await until(() => p.$("increment")?.textContent === "3", "mounts");
+  const mark = lines.length;
+  await closing.close();
+  await until(() => p.status() === "reconnecting", "the page notices the server closed");
+  check(closing.sessions === 0, "closing ends every session", { sessions: closing.sessions });
+  check(!lines.slice(mark).some((line) => line.includes("lost its page")), "without waiting for their pages to come back", { lines: lines.slice(mark) });
   p.app.close();
   p.window.close();
 }

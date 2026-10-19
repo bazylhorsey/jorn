@@ -242,6 +242,7 @@ export function attach(
 
     end(reason) {
       clearTimeout(this.expiry);
+      this.socket = null; // So its socket closing later doesn't wait for a page.
       live.delete(this.id);
       this.program?.close();
       info(`Jorn: ${this.name} ended: ${reason}`);
