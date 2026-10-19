@@ -1,6 +1,6 @@
 # Roadmap
 
-Where Jorn is, feature by feature. The [README](README.md#roadmap) has the stage-level view.
+Where Jorn is, feature by feature. The [README](README.md#roadmap) has the version-level view.
 
 Statuses: **done** is available today. **partial** is available with a stated difference. **todo** is not started.
 
@@ -38,6 +38,7 @@ Statuses: **done** is available today. **partial** is available with a stated di
 |---|---|---|
 | `on` and `custom` | done | Options are static, so the client can decide `preventDefault` instantly without a round trip. |
 | `onClick`, `onInput`, `onCheck`, `onSubmit` | done | |
+| Submitting a form with its fields | todo | |
 | `preventDefault` and `stopPropagation` | done | Static, through `custom`. Deciding per event is todo. |
 | Mouse, keyboard, focus, blur, and change helpers | done | Keyboard helpers include `key`, so server components get it. |
 | Debounce and throttle | done | `Event.debounce` and `Event.throttle`. They run in the page, so dropped events never reach a server. |
@@ -61,16 +62,21 @@ Statuses: **done** is available today. **partial** is available with a stated di
 | Server components in a page (`Jorn.ServerComponent.element`, `<jorn-server-component>`) | done | Connects while it's in the document, and keeps the connection when it moves. |
 | Server runtime over a websocket (Node, Bun, Deno) | partial | Node, in [server/jorn.js](server/jorn.js), with `stream` in the page. Pages reconnect to their sessions and catch up, heartbeats and limits keep the server healthy, and elm/http works on the server. Bun and Deno come with #23. |
 | Components as custom elements (attributes, properties, slots, form association) | todo | |
-| Generated encoders for shared client/server types | todo | |
-| Session snapshots and typed migrations across deploys | todo | |
 | Server-side rendering and hydration | todo | |
+| Server components over server-sent events or polling | todo | For hosts and proxies that don't allow websockets. |
+| URL routing | todo | Jorn programs run on `Platform.worker`, which has no `Browser.Navigation`. |
+| Messaging a running app from JavaScript | todo | Through the program's own ports. |
+| Generated encoders for shared client/server types | todo | After 1.0. |
+| Session snapshots and typed migrations across deploys | todo | After 1.0. |
+| REST endpoints written in Elm | todo | After 1.0. |
 
-## Testing utilities
+## Tooling and testing
 
 | Feature | Status | Notes |
 |---|---|---|
 | Query a view (find by tag, class, id, text, ...) | todo | |
 | Simulate an app (send messages and events, inspect model and view) | todo | |
+| Dev server and build command | todo | |
 
 ## Performance
 
