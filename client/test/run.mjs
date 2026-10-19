@@ -458,6 +458,118 @@ unit("late updates don't undo newer clicks", () => {
   check(box.checked === true, "a server-side check applies");
 });
 
+// Debounce and throttle run on real timers, so these wait.
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function asyncUnit(name, body) {
+  try {
+    await body();
+  } catch (error) {
+    fail(`unit: ${name} threw`, { error: String(error) });
+  }
+}
+
+function typeInto(input, value) {
+  input.value = value;
+  const event = new window.Event("input", { bubbles: true, cancelable: true });
+  input.dispatchEvent(event);
+  return event;
+}
+
+await asyncUnit("debounce sends only the last event, once they stop", async () => {
+  const { container, sent, jorn } = setup();
+  jorn.mount(el("div", {}, [el("input", { events: { input: opts({ include: ["target.value"], debounce: 40, preventDefault: true }) } })]));
+  const input = container.firstChild.firstChild;
+  const events = [];
+  // Longer than the debounce in all, with no pause as long as it.
+  for (const value of ["a", "ab", "abc", "abcd", "abcde", "abcdef", "abcdefg", "abcdefgh"]) {
+    events.push(typeInto(input, value));
+    await sleep(10);
+  }
+  check(sent.length === 0, "nothing sent while typing", { sent });
+  check(events.every((event) => event.defaultPrevented), "preventDefault applies to every event, dropped ones too");
+  await sleep(80);
+  check(sent.length === 1 && sent[0].event.target.value === "abcdefgh", "the last one, once", { sent });
+  check(JSON.stringify(sent[0]?.path) === "[0]", "with its path", { sent });
+});
+
+await asyncUnit("throttle sends the first now and the latest at the end of the interval", async () => {
+  const { container, sent, jorn } = setup();
+  jorn.mount(el("input", { events: { input: opts({ include: ["target.value"], throttle: 50 }) } }));
+  const input = container.firstChild;
+  typeInto(input, "1");
+  check(sent.length === 1 && sent[0].event.target.value === "1", "the first goes straight away", { sent });
+  typeInto(input, "2");
+  typeInto(input, "3");
+  check(sent.length === 1, "the rest wait", { sent });
+  await sleep(80);
+  check(sent.length === 2 && sent[1].event.target.value === "3", "the latest goes at the end of the interval", { sent });
+  await sleep(80);
+  check(sent.length === 2, "and nothing after that", { sent });
+});
+
+await asyncUnit("throttle caps how long debounce holds events back", async () => {
+  const { container, sent, jorn } = setup();
+  jorn.mount(el("input", { events: { input: opts({ include: ["target.value"], debounce: 30, throttle: 60 }) } }));
+  const input = container.firstChild;
+  let whileTyping = 0;
+  for (let i = 1; i <= 15; i++) {
+    whileTyping = sent.length;
+    typeInto(input, String(i));
+    await sleep(10);
+  }
+  check(whileTyping >= 1, "events go out while the typing never pauses", { sent });
+  await sleep(80);
+  check(sent.at(-1)?.event.target.value === "15", "and the last one goes once it does", { sent });
+  check(sent.length < 15, "most are dropped", { sent });
+});
+
+await asyncUnit("late updates still count as echoes with debounced input", async () => {
+  const { container, sent, jorn } = setup();
+  jorn.mount(el("input", { attrs: { value: "" }, events: { input: opts({ include: ["target.value"], debounce: 20 }) } }));
+  const input = container.firstChild;
+  typeInto(input, "B");
+  typeInto(input, "Ba");
+  typeInto(input, "Baz");
+  await sleep(50);
+  check(sent.length === 1 && sent[0].event.target.value === "Baz", "one event", { sent });
+  typeInto(input, "Bazy");
+  jorn.patch([{ op: "set-attr", path: [], name: "value", value: "Baz" }]);
+  check(input.value === "Bazy", "the update for Baz doesn't undo newer typing", { got: input.value });
+  jorn.patch([{ op: "set-attr", path: [], name: "value", value: "" }]);
+  check(input.value === "", "clearing the field still applies", { got: input.value });
+});
+
+await asyncUnit("an event goes after the held events that fired before it", async () => {
+  const { container, sent, jorn } = setup();
+  jorn.mount(
+    el("form", { events: { submit: opts({ preventDefault: true }) } }, [
+      el("input", { events: { input: opts({ include: ["target.value"], debounce: 1000 }) } }),
+    ]),
+  );
+  const input = container.firstChild.firstChild;
+  typeInto(input, "milk");
+  container.firstChild.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
+  check(sent.map((message) => message.name).join() === "input,submit", "the typing, then the submit", { sent });
+  check(sent[0]?.event?.target?.value === "milk", "with the typed value", { sent });
+  await sleep(20);
+  check(sent.length === 2, "and the typing isn't sent again later", { sent });
+});
+
+await asyncUnit("held events are dropped when their handler or element goes", async () => {
+  const { container, sent, jorn } = setup();
+  const handler = { input: opts({ debounce: 20 }) };
+  jorn.mount(el("div", {}, [el("input", { events: handler }), el("input", { events: handler })]));
+  typeInto(container.firstChild.childNodes[0], "x");
+  typeInto(container.firstChild.childNodes[1], "y");
+  jorn.patch([
+    { op: "remove-event", path: [0], name: "input" },
+    { op: "truncate", path: [], length: 1 },
+  ]);
+  await sleep(50);
+  check(sent.length === 0, "nothing sent", { sent });
+});
+
 const unitFailures = failed;
 
 // ---- Randomized cases ---------------------------------------------------------

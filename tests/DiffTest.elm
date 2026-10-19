@@ -218,15 +218,15 @@ unit =
                     (Html.form [ Events.on "submit" (Decode.succeed ()) ] [])
                     (Html.form [ Events.preventDefault (Events.onSubmit ()) ] [])
                     |> expectPatches
-                        [ SetEvent [] "submit" { preventDefault = True, stopPropagation = False, include = [] } ]
+                        [ SetEvent [] "submit" { preventDefault = True, stopPropagation = False, include = [], debounce = 0, throttle = 0 } ]
         , test "an option reaches only the handler it wraps" <|
             \_ ->
                 Jorn.Patch.diff
                     (Html.div [] [])
                     (Html.div [ Events.preventDefault (Events.onClick ()), Events.onInput (\_ -> ()) ] [])
                     |> expectPatches
-                        [ SetEvent [] "click" { preventDefault = True, stopPropagation = False, include = [] }
-                        , SetEvent [] "input" { preventDefault = False, stopPropagation = False, include = [ "target.value" ] }
+                        [ SetEvent [] "click" { preventDefault = True, stopPropagation = False, include = [], debounce = 0, throttle = 0 }
+                        , SetEvent [] "input" { preventDefault = False, stopPropagation = False, include = [ "target.value" ], debounce = 0, throttle = 0 }
                         ]
         , test "options on one handler merge rather than replace each other" <|
             \_ ->
@@ -234,7 +234,21 @@ unit =
                     (Html.div [] [])
                     (Html.div [ Events.include [ "target.value" ] (Events.stopPropagation (Events.onClick ())) ] [])
                     |> expectPatches
-                        [ SetEvent [] "click" { preventDefault = False, stopPropagation = True, include = [ "target.value" ] } ]
+                        [ SetEvent [] "click" { preventDefault = False, stopPropagation = True, include = [ "target.value" ], debounce = 0, throttle = 0 } ]
+        , test "debounce and throttle merge to the longest asked for" <|
+            \_ ->
+                Jorn.Patch.diff
+                    (Html.div [] [])
+                    (Html.div [ Events.debounce 100 (Events.throttle 500 (Events.debounce 300 (Events.preventDefault (Events.onClick ())))) ] [])
+                    |> expectPatches
+                        [ SetEvent [] "click" { preventDefault = True, stopPropagation = False, include = [], debounce = 300, throttle = 500 } ]
+        , test "a changed debounce is re-sent" <|
+            \_ ->
+                Jorn.Patch.diff
+                    (Html.input [ Events.debounce 100 (Events.onInput identity) ])
+                    (Html.input [ Events.debounce 200 (Events.onInput identity) ])
+                    |> expectPatches
+                        [ SetEvent [] "input" { preventDefault = False, stopPropagation = False, include = [ "target.value" ], debounce = 200, throttle = 0 } ]
         , test "an option around something that is not a handler is ignored" <|
             \_ ->
                 Jorn.Patch.diff
@@ -470,6 +484,13 @@ wire =
                     |> Encode.encode 0
                     |> Expect.equal
                         """{"tag":"button","namespace":"","attrs":{"disabled":""},"props":{},"events":{"click":{"preventDefault":false,"stopPropagation":false,"include":[]}},"children":[{"text":"go"}]}"""
+        , test "golden debounce and throttle encoding" <|
+            \_ ->
+                Html.input [ Events.debounce 300 (Events.onInput identity), Events.throttle 100 (Events.on "scroll" (Decode.succeed "")) ]
+                    |> Jorn.Patch.encodeHtml
+                    |> Encode.encode 0
+                    |> Expect.equal
+                        """{"tag":"input","namespace":"","attrs":{},"props":{},"events":{"input":{"preventDefault":false,"stopPropagation":false,"include":["target.value"],"debounce":300},"scroll":{"preventDefault":false,"stopPropagation":false,"include":[],"throttle":100}},"children":[]}"""
         ]
 
 

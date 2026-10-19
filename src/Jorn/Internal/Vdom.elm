@@ -61,11 +61,14 @@ type Attribute msg
 {-| Event options are static on purpose. A server component has to tell the
 client up front whether to call preventDefault, because the decision can't
 wait for a round trip. `include` lists the dotted event fields the client
-must serialize and send back (for example `target.value`).
+must serialize and send back (for example `target.value`). `debounce` and
+`throttle` are in milliseconds, 0 for none, and also run in the client, so
+dropped events never cross the wire.
 
 Options wrap the handler they apply to, and options on the same handler merge:
-`preventDefault` and `stopPropagation` are true if any of them asked, and
-`include` is the union of what they asked for. An option wrapped around
+`preventDefault` and `stopPropagation` are true if any of them asked,
+`include` is the union of what they asked for, and `debounce` and `throttle`
+are the longest asked for. An option wrapped around
 anything that isn't a handler is dropped, leaving the attribute as it was.
 
 -}
@@ -73,12 +76,14 @@ type alias EventOptions =
     { preventDefault : Bool
     , stopPropagation : Bool
     , include : List String
+    , debounce : Int
+    , throttle : Int
     }
 
 
 defaultOptions : EventOptions
 defaultOptions =
-    { preventDefault = False, stopPropagation = False, include = [] }
+    { preventDefault = False, stopPropagation = False, include = [], debounce = 0, throttle = 0 }
 
 
 
@@ -153,6 +158,8 @@ combineOptions added options =
     { preventDefault = added.preventDefault || options.preventDefault
     , stopPropagation = added.stopPropagation || options.stopPropagation
     , include = addPaths added.include options.include
+    , debounce = max added.debounce options.debounce
+    , throttle = max added.throttle options.throttle
     }
 
 
@@ -398,10 +405,24 @@ encodeNode node =
 encodeOptions : EventOptions -> Value
 encodeOptions options =
     Encode.object
-        [ ( "preventDefault", Encode.bool options.preventDefault )
-        , ( "stopPropagation", Encode.bool options.stopPropagation )
-        , ( "include", Encode.list Encode.string options.include )
-        ]
+        ([ ( "preventDefault", Encode.bool options.preventDefault )
+         , ( "stopPropagation", Encode.bool options.stopPropagation )
+         , ( "include", Encode.list Encode.string options.include )
+         ]
+            ++ milliseconds "debounce" options.debounce
+            ++ milliseconds "throttle" options.throttle
+        )
+
+
+{-| Left out when unused, so handlers without them look as they always have.
+-}
+milliseconds : String -> Int -> List ( String, Value )
+milliseconds name value =
+    if value > 0 then
+        [ ( name, Encode.int value ) ]
+
+    else
+        []
 
 
 

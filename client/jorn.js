@@ -51,6 +51,7 @@ export function connect(container, { send, raw = false, effects = {} } = {}) {
   const handlers = new WeakMap(); // element -> Map(event name -> options)
   const pristine = new Map(); // "namespace tag" -> untouched element, for property defaults
   const reported = new WeakMap(); // element -> { value: [...], checked: [...] } the user sent, not yet echoed
+  const held = new WeakMap(); // element -> Map(event name -> debounce and throttle state)
   let echoed = new Map(); // element -> { name: value } echoes skipped in the current batch
   let changing = false; // true while mount, patch or unmount is changing the DOM
 
@@ -160,6 +161,8 @@ export function connect(container, { send, raw = false, effects = {} } = {}) {
   function removeEvent(el, name) {
     const byName = handlers.get(el);
     if (byName && byName.delete(name)) el.removeEventListener(name, listen);
+    held.get(el)?.get(name)?.cancel();
+    held.get(el)?.delete(name);
   }
 
   function listen(event) {
@@ -176,7 +179,97 @@ export function connect(container, { send, raw = false, effects = {} } = {}) {
     const path = pathOf(el);
     if (!path) return;
     remember(el);
-    send({ path, name: event.type, event: raw ? event : pick(event, options.include) });
+    const payload = raw ? event : pick(event, options.include);
+    if (options.debounce > 0 || options.throttle > 0) {
+      limited(el, event.type, options, payload);
+    } else {
+      flushHeld();
+      send({ path, name: event.type, event: payload });
+    }
+  }
+
+  // Debounce and throttle hold events back here, so dropped ones never leave
+  // the page. What's held is the latest event's payload, picked when it
+  // fired. Its path is worked out when it's sent, so it fits the tree on
+  // screen by then, and an element that's gone by then sends nothing.
+  function limited(el, name, { debounce = 0, throttle = 0 }, payload) {
+    let byName = held.get(el);
+    if (!byName) held.set(el, (byName = new Map()));
+    let limit = byName.get(name);
+    if (!limit) byName.set(name, (limit = new Limit(el, name)));
+
+    if (debounce > 0) {
+      // Send the last one once they stop. With throttle too, don't hold
+      // them back longer than that.
+      limit.hold(payload);
+      clearTimeout(limit.debounce);
+      limit.debounce = setTimeout(() => limit.flush(), debounce);
+      if (throttle > 0 && !limit.throttle) limit.throttle = setTimeout(() => limit.flush(), throttle);
+    } else if (limit.throttle) {
+      // Throttle on its own, mid-interval: keep the latest.
+      limit.hold(payload);
+    } else {
+      // The first goes now. The latest one held during the interval goes
+      // when it ends, and starts the next one.
+      flushHeld();
+      report(el, name, payload);
+      const interval = () => {
+        limit.throttle = setTimeout(() => {
+          limit.throttle = null;
+          if (!limit.waiting) return;
+          limit.flush();
+          interval();
+        }, throttle);
+      };
+      interval();
+    }
+  }
+
+  // Held events, in the order they last fired. They go before any event
+  // that fires after them, so a submit never overtakes the debounced typing
+  // that came before it.
+  const holding = new Set();
+
+  class Limit {
+    constructor(el, name) {
+      this.el = el;
+      this.name = name;
+      this.pending = undefined;
+      this.waiting = false;
+      this.debounce = null;
+      this.throttle = null;
+    }
+
+    hold(payload) {
+      this.pending = payload;
+      this.waiting = true;
+      holding.delete(this);
+      holding.add(this);
+    }
+
+    flush() {
+      const { waiting, pending } = this;
+      this.cancel();
+      if (waiting) report(this.el, this.name, pending);
+    }
+
+    cancel() {
+      clearTimeout(this.debounce);
+      clearTimeout(this.throttle);
+      this.debounce = this.throttle = null;
+      this.waiting = false;
+      this.pending = undefined;
+      holding.delete(this);
+    }
+  }
+
+  function flushHeld() {
+    for (const limit of [...holding]) limit.flush();
+  }
+
+  function report(el, name, payload) {
+    const path = pathOf(el);
+    if (path) send({ path, name, event: payload });
   }
 
   // Paths are computed when the event fires, so they're always correct for
