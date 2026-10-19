@@ -89,6 +89,7 @@ Program to page, on `toJorn`:
 | `{ "mount": node }` | Render the first view |
 | `{ "frame": true }` | Send `{ "frame": true }` back on the next animation frame |
 | `{ "patches": [...], "instructions": [...], "painted": bool }` | Apply the patches, then run the instructions. If `painted` is `true`, send `{ "painted": true }` back once both are done |
+| `{ "mount": node, "painted": bool }` | The answer to `remount`. Render the view, and send `{ "painted": true }` back if `painted` is `true` |
 | `{ "error": "..." }` | Log it. The program got an event or message it couldn't read |
 
 Page to program, on `fromJorn`:
@@ -98,6 +99,7 @@ Page to program, on `fromJorn`:
 | `{ "event": { "path", "name", "event" } }` | Route the event to its handler and run `update` |
 | `{ "frame": true }` | Run `beforePaint` messages, diff once, and send the patches and instructions |
 | `{ "painted": true }` | Run `afterPaint` messages |
+| `{ "remount": true }` | Send the whole view again, as `mount` |
 | `{ "shutdown": true }` | Stop, and ignore everything after |
 
 The program asks for a frame only when something changed, and every message that arrives before the frame is handled before its one diff, so a burst of events costs one render.
@@ -110,18 +112,28 @@ Page to server:
 
 | Message | Server behavior |
 |---|---|
-| `{ "join": { "protocol": 0, "flags": ..., "csrfToken": "..." } }` | Must be first. Start a session for this page. `flags` and `csrfToken` are optional, and the server decides what to do with them |
+| `{ "join": { "protocol": 0, "flags": ..., "csrfToken": "...", "session": "...", "seen": n } }` | Must be first. Start a session for this page, or resume the one named by `session`. Everything but `protocol` is optional, and the server decides what to do with `flags` and `csrfToken` |
 | `{ "event": { "path", "name", "event" } }` | Pass it to the program. `event` holds only the fields in the handler's `include` |
 | `{ "painted": true }` | Pass it to the program |
+| `{ "remount": true }` | The page couldn't apply a patch. Pass it to the program, which sends the whole view again |
+| `{ "ping": true }` | Answer `{ "pong": true }` |
 
-Anything else from the page is ignored. Server to page:
+Anything else from the page is ignored. Server to page, each with a `seq` that counts up from 1 within a session (`pong` has none):
 
 | Message | Page behavior |
 |---|---|
-| `{ "mount": node }` | Render the first view |
-| `{ "patches": [...], "instructions": [...], "painted": bool }` | As in client mode: apply, run, and send `{ "painted": true }` back if asked |
+| `{ "seq": 1, "session": "..." }` | First in every new session. Keep the id, to resume with it |
+| `{ "seq": n, "mount": node, "painted": bool }` | Render the whole view, replacing what's there. If `painted` is `true`, send `{ "painted": true }` back |
+| `{ "seq": n, "patches": [...], "instructions": [...], "painted": bool }` | As in client mode: apply, run, and send `{ "painted": true }` back if asked |
+| `{ "pong": true }` | Nothing. It only shows the server is there |
 
-The server closes the socket with 1002 if the first message isn't a `join` for a protocol it speaks, 1007 if a message isn't JSON, 1008 if it won't let the page in, and 1011 if the session can't start. Closing the socket ends the session.
+The program sends `mount` with `painted` when it answers `remount`, so `afterPaint` messages waiting on patches the page never applied still run.
+
+**Reconnecting.** When a socket drops without a close from either side on purpose, the session waits for its page for a while (30 seconds by default). A page that reconnects sends a `join` with its `session` and `seen`, the last `seq` it applied. If the server still has every message after `seen`, it sends them again, in order. If not, it sends the whole view. If the session is gone, the page gets a new one, with a new `session` message and a fresh mount, so it never keeps showing a view nobody is updating. Events the user causes while the page is disconnected are lost. A page that closes its socket with 1000 or 1001 ends its session straight away.
+
+**Heartbeats.** The server pings every socket (with websocket ping frames, every 30 seconds by default) and drops one that hasn't answered the last ping. The page sends `{ "ping": true }` when it hasn't heard from the server for a while, and reconnects if no answer comes.
+
+The server closes the socket with 1002 if the first message isn't a `join` for a protocol it speaks, 1007 if a message isn't JSON, 1008 if it won't let the page in or the page sends too many messages, 1013 if it's running as many sessions as it allows, and 1011 if the session can't start. A page doesn't reconnect after 1002, 1007 or 1008.
 
 ## Semantics worth knowing
 

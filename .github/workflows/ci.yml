@@ -62,6 +62,9 @@ jobs:
       - name: Server runtime
         run: node run.mjs
         working-directory: server/test
+      - name: Reconnects, heartbeats and limits
+        run: node reconnect.mjs
+        working-directory: server/test
       - name: Todos example on a server
         run: node example.mjs server
         working-directory: client/test

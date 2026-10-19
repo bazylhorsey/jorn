@@ -35,7 +35,13 @@ const app = stream(document.getElementById("app"), "/app", {
 app.close(); // disconnect and empty the container
 ```
 
-A relative address is resolved against the page, and `http` becomes `ws`. `csrfToken` goes to the server's `authorize` check. The page only applies patches and sends events back: `update`, `view` and commands run on the server, and focus, scrolling and `Effect.client` run here.
+A relative address is resolved against the page, and `http` becomes `ws`. `csrfToken` goes to the server's `authorize` check.
+
+If the connection drops, the page reconnects, backing off up to five seconds between tries, and picks up its session where it left off: the server sends what it missed, or the whole view if that's too much. If a patch doesn't fit the page, because something else changed the DOM, the page asks for the whole view. Clicks and other events during a disconnect are lost, but anything typed stays in its field. Style the waiting state with the container's `data-jorn-connection` attribute, which is `connecting`, `open`, `reconnecting` or `closed`:
+
+```css
+[data-jorn-connection="reconnecting"] { opacity: 0.5; pointer-events: none; }
+``` The page only applies patches and sends events back: `update`, `view` and commands run on the server, and focus, scrolling and `Effect.client` run here.
 
 ## Server components as elements
 
@@ -80,7 +86,7 @@ jorn.patch(patches); // after every update, with the output of Jorn.Patch.encode
 | | |
 |---|---|
 | `start(program, container, { flags, effects, ports })` | Run a compiled Jorn program in `container`. Returns `{ shutdown() }`. |
-| `stream(container, url, { flags, csrfToken, effects })` | Show a program running on a server in `container`, over a websocket. Returns `{ close() }`. |
+| `stream(container, url, { flags, csrfToken, effects, heartbeat })` | Show a program running on a server in `container`, over a websocket. Returns `{ close() }`. |
 | `defineServerComponent({ effects })` | Define `<jorn-server-component>`. Only the first call counts. |
 | `connect(container, { send, raw, effects })` | Take over `container`. Its only child is the root of your view from here on. `effects` maps names to the functions `Effect.client` can call. |
 | `.mount(node)` | Render a whole tree, replacing whatever was there. |

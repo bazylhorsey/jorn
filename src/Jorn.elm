@@ -224,6 +224,16 @@ step config message ((State s) as state) =
                     Ok Painted ->
                         List.foldl (\msg acc -> andThen (updateWith config msg) acc) ( State { s | painting = [] }, Cmd.none ) s.painting
 
+                    Ok Remount ->
+                        ( state
+                        , config.ports.toJorn
+                            (Encode.object
+                                [ ( "mount", Jorn.Patch.encodeHtml s.screen )
+                                , ( "painted", Encode.bool (not (List.isEmpty s.painting)) )
+                                ]
+                            )
+                        )
+
                     Ok Shutdown ->
                         ( State { s | running = False }, Cmd.none )
 
@@ -232,12 +242,14 @@ step config message ((State s) as state) =
 
 
 {-| What the page sends: an event, the animation frame we asked for, word
-that the last patches are on the page, or a request to stop.
+that the last patches are on the page, a request for the whole view because
+the page lost track of it, or a request to stop.
 -}
 type Incoming
     = Event Routing.Incoming
     | Frame
     | Painted
+    | Remount
     | Shutdown
 
 
@@ -247,6 +259,7 @@ incoming =
         [ Decode.field "event" (Decode.map Event Routing.decoder)
         , Decode.field "frame" (Decode.succeed Frame)
         , Decode.field "painted" (Decode.succeed Painted)
+        , Decode.field "remount" (Decode.succeed Remount)
         , Decode.field "shutdown" (Decode.succeed Shutdown)
         ]
 

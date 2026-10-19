@@ -542,15 +542,20 @@ export function start(program, container, { flags, effects = {}, ports = {} } = 
  *   app.close();                               // disconnect and empty the container
  *
  * A relative `url` is resolved against the page's address, and `http` and
- * `https` become `ws` and `wss`.
+ * `https` become `ws` and `wss`. `csrfToken` goes to the server with
+ * `flags`, for its `authorize` check.
+ *
+ * If the connection drops, the page reconnects, backing off up to five
+ * seconds between tries, and picks up its session where it left off.
+ * `heartbeat` is how often, in milliseconds, it checks that the server is
+ * still there. The container's `data-jorn-connection` attribute says how
+ * it's going: `connecting`, `open`, `reconnecting` or `closed`.
  *
  * @param {Element} container
  * @param {string | URL} url
- * `csrfToken` goes to the server with `flags`, for its `authorize` check.
- *
- * @param {{ flags?: unknown, csrfToken?: string, effects?: Record<string, Function> }} options
+ * @param {{ flags?: unknown, csrfToken?: string, effects?: Record<string, Function>, heartbeat?: number }} options
  */
-export function stream(container, url, { flags, csrfToken, effects = {} } = {}) {
+export function stream(container, url, { flags, csrfToken, effects = {}, heartbeat = 30_000 } = {}) {
   const view = container?.ownerDocument?.defaultView;
   const Socket = view?.WebSocket ?? globalThis.WebSocket;
   if (typeof Socket !== "function") {
@@ -560,35 +565,129 @@ export function stream(container, url, { flags, csrfToken, effects = {} } = {}) 
   if (address.protocol === "http:") address.protocol = "ws:";
   if (address.protocol === "https:") address.protocol = "wss:";
 
-  const socket = new Socket(address.href);
   let running = true;
+  let socket = null;
+  let session = null; // The server's name for this page's session, to resume it.
+  let seen = 0; // The last message applied, so the server knows what was missed.
+  let lost = false; // A patch didn't fit, so ignore patches until a new mount.
+  let attempt = 0;
+  let retry = null;
+  let pulse = null;
+  let heard = true;
+  let pinged = false;
+
   const post = (message) => {
-    if (running && socket.readyState === socket.OPEN) socket.send(JSON.stringify(message));
+    if (running && socket?.readyState === socket?.OPEN) socket.send(JSON.stringify(message));
   };
   const jorn = connect(container, { send: (event) => post({ event }), effects });
 
-  socket.addEventListener("open", () => post({ join: { protocol: 0, flags, csrfToken } }));
-  socket.addEventListener("message", ({ data }) => {
-    if (!running) return;
-    let message;
-    try {
-      message = JSON.parse(data);
-    } catch {
-      console.warn("Jorn: the server sent something that isn't JSON");
-      return;
+  // For CSS: connecting, open, reconnecting or closed.
+  const status = (state) => container.setAttribute("data-jorn-connection", state);
+
+  function open() {
+    status(attempt ? "reconnecting" : "connecting");
+    const current = (socket = new Socket(address.href));
+    current.addEventListener("open", () => {
+      post({ join: { protocol: 0, flags, csrfToken, session: session ?? undefined, seen } });
+      status("open");
+      attempt = 0;
+      heard = true;
+      pinged = false;
+      clearInterval(pulse);
+      // The server can die without closing the socket. A page that has heard
+      // nothing for a while asks, and one that gets no answer starts over.
+      pulse = setInterval(() => {
+        if (heard) {
+          heard = false;
+        } else if (!pinged) {
+          pinged = true;
+          post({ ping: true });
+        } else {
+          drop(current, "the server stopped answering");
+        }
+      }, heartbeat);
+    });
+    current.addEventListener("message", ({ data }) => {
+      if (!running || current !== socket) return;
+      heard = true;
+      pinged = false;
+      let message;
+      try {
+        message = JSON.parse(data);
+      } catch {
+        console.warn("Jorn: the server sent something that isn't JSON");
+        return;
+      }
+      receive(message);
+    });
+    current.addEventListener("close", ({ code, reason }) => {
+      if (current !== socket) return;
+      // Refusals won't go differently next time.
+      if (code === 1002 || code === 1007 || code === 1008) {
+        console.warn(`Jorn: the server turned this page away (${code}${reason ? `: ${reason}` : ""})`);
+        stop("closed");
+        return;
+      }
+      drop(current, `the connection closed (${code})`);
+    });
+  }
+
+  function receive(message) {
+    if (message.session !== undefined && message.session !== session) {
+      // A new session: whatever came before is someone else's.
+      session = message.session;
+      seen = 0;
     }
-    draw(jorn, message, () => post({ painted: true }));
-  });
-  socket.addEventListener("close", ({ code, reason }) => {
-    if (running && code !== 1000) console.warn(`Jorn: the server closed the connection (${code}${reason ? `: ${reason}` : ""})`);
-  });
+    if (Number.isInteger(message.seq)) {
+      if (message.seq <= seen) return;
+      seen = message.seq;
+    }
+    if (message.mount) lost = false;
+    else if (lost) return;
+    try {
+      draw(jorn, message, () => post({ painted: true }));
+    } catch (error) {
+      // The page and the server disagree about what's on screen.
+      console.warn(`Jorn: ${error.message}. Asking the server for the whole view.`);
+      lost = true;
+      post({ remount: true });
+    }
+  }
+
+  // Reconnect, sooner at first and then backing off, with some jitter so a
+  // restarted server isn't hit by every page at once.
+  function drop(dead, why) {
+    if (!running || dead !== socket) return;
+    socket = null;
+    clearInterval(pulse);
+    try {
+      dead.close();
+    } catch {
+      // Already gone.
+    }
+    const delay = Math.min(5000, 100 * 2 ** attempt) * (0.5 + Math.random() / 2);
+    attempt++;
+    status("reconnecting");
+    if (attempt === 1) console.warn(`Jorn: ${why}, reconnecting`);
+    retry = setTimeout(open, delay);
+  }
+
+  function stop(state) {
+    running = false;
+    clearInterval(pulse);
+    clearTimeout(retry);
+    status(state);
+  }
+
+  open();
 
   return {
-    /** Disconnect and empty the container. */
+    /** Disconnect, ending the session, and empty the container. */
     close() {
       if (!running) return;
-      running = false;
-      socket.close(1000);
+      const last = socket;
+      stop("closed");
+      last?.close(1000);
       jorn.unmount();
     },
   };
@@ -670,7 +769,10 @@ export function defineServerComponent({ effects = {}, window = globalThis } = {}
 // What both modes do with a message from the program: mount it, or apply
 // its patches and then its instructions, and say so if it asked.
 function draw(jorn, message, painted) {
-  if (message.mount) jorn.mount(message.mount);
+  if (message.mount) {
+    jorn.mount(message.mount);
+    if (message.painted) painted();
+  }
   if (message.patches) {
     jorn.patch(message.patches);
     jorn.run(message.instructions ?? []);
