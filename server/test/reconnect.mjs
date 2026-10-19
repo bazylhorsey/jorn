@@ -198,8 +198,12 @@ function page(path, { flags = 3, heartbeat = 100 } = {}) {
   p.click("increment");
   await until(() => p.$("increment").textContent === "4", "a click");
   network.silence(); // Nothing gets through, and nothing closes.
-  await until(() => lines.some((line) => line.includes("(it stopped answering)")), "the server notices a page that stopped answering pings");
-  await until(() => p.status() === "open" && p.$("increment").textContent === "4", "the page comes back");
+  const before = lines.length;
+  await until(() => lines.slice(before).some((line) => line.includes("(it stopped answering)")), "the server notices a page that stopped answering pings");
+  // The page still says it's open until the close reaches it, so wait for
+  // the server to see it come back on a new connection.
+  await until(() => lines.slice(before).some((line) => / resumed/.test(line)), "the page comes back");
+  check(p.status() === "open" && p.$("increment").textContent === "4", "where it was", { status: p.status(), count: p.$("increment").textContent });
   p.click("increment");
   await until(() => p.$("increment").textContent === "5", "to the same session");
   p.app.close();
