@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## v0.2 (2026-10-19)
+
+Server components: run an app on a Node server and stream it to the page over a websocket, with reconnects, limits, debounced and throttled events, and elm/http on the server.
 
 - Server mode (#19). `server/jorn.js` runs a `Jorn.simple` or `Jorn.application` program on Node, one instance per connected page, and `stream` in `client/jorn.js` shows it in the page over a websocket. The program doesn't change: commands run on the server, and patcher instructions and `Effect.client` run in the page. `attach` serves a program on a path of an HTTP server, only to pages from the same origin unless you list others, and `session` runs one instance for hosts that move the messages themselves. The socket messages are specified in PROTOCOL.md.
 - `Jorn.ServerComponent` (#20). `element` puts a server component in a page as a `<jorn-server-component>`, with its `route`, `flags` and `csrfToken`, and `script` loads the client for pages that don't have it. `defineServerComponent` in `client/jorn.js` defines the element: it connects while it's in the document and keeps its connection when moved. A component talks to the page around it with `Effect.event`, which bubbles out of the element. `decodeEvent` turns an event from the page into a message, for hosts that do their own routing. `attach` takes an `authorize` function, which gets the page's CSRF token.

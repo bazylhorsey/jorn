@@ -4,11 +4,11 @@
 
 Jorn is an attempt to build the web framework that doesn't make you choose. Today every serious option wins on one axis by giving up another. Jorn's bet is that with the right language, you can have all of them at once.
 
-> **Status: v0.1.** You can build browser apps with Jorn: every HTML and SVG element, attributes and ARIA, keyed lists, fragments, effects, and an app runtime, on a pure Elm virtual DOM with a tested wire protocol and patcher. Server components are next. The rest of this page describes where it's going. See the [roadmap](ROADMAP.md).
+> **Status: v0.2.** You can build apps with Jorn and run them in the browser or on a Node server: every HTML and SVG element, attributes and ARIA, keyed lists, fragments, effects, an app runtime, and server components that reconnect and catch up, on a pure Elm virtual DOM with a tested wire protocol and patcher. The rest of the view layer is next. The rest of this page describes where it's going. See the [roadmap](ROADMAP.md).
 
-## What v0.1 gives you
+## What v0.2 gives you
 
-Browser apps in the Elm Architecture, on a virtual DOM that is ordinary Elm data, so a `view` can be diffed anywhere: in the browser today, and on a server streaming patches to a browser next.
+Apps in the Elm Architecture, on a virtual DOM that is ordinary Elm data, so a `view` can be diffed anywhere: in the browser, or on a server streaming patches to the browser.
 
 ```elm
 port module Main exposing (main)
@@ -52,12 +52,26 @@ start(Elm.Main, document.getElementById("app"));
 
 Each click runs `update`, diffs the new view against the old one in Elm, and sends the page one patch: set the button's text.
 
+The same program runs on a Node server without changes. `attach` from [`server/jorn.js`](server/jorn.js) runs one instance of it for each page, and `stream` shows it in the page over a websocket:
+
+```js
+attach(server, { path: "/app", program: Elm.Main });
+```
+
+```js
+stream(document.getElementById("app"), "/app");
+```
+
+[server/README.md](server/README.md) covers the rest: flags, security, reconnects and limits, and what changes when commands run on the server.
+
 | Module | What it does |
 |---|---|
 | `Jorn.Element`, `Jorn.Element.Html`, `Jorn.Attribute`, `Jorn.Event` | Build views. Ordinary Elm data, like `elm/html`. |
 | `Jorn`, `Jorn.Effect` | Run an app in the page: `init`, `update`, `view`, and effects. |
 | `Jorn.Patch` | Diff two views and encode the patches as JSON. |
+| `Jorn.ServerComponent` | Put a server component anywhere in a page, as an element. |
 | [`client/jorn.js`](client/jorn.js) | The browser side: apply patches to the DOM and report events back. No dependencies. |
+| [`server/jorn.js`](server/jorn.js) | The server side: run a program on Node, one session per page, over a websocket. |
 
 [examples/todos](examples/todos) is a complete app, written the way Jorn apps are meant to be. Underneath, the page and the program only exchange JSON: events go in, and only what changed comes back out. A click and a keystroke look like this:
 
@@ -69,13 +83,13 @@ page -> app {"path":[1],"name":"input","event":{"target":{"value":"Jorn"}}}
 app -> page {"patches":[{"op":"set-text","path":[0,0],"text":"Hello, Jorn"},{"op":"set-attr","path":[1],"name":"value","value":"Jorn"}]}
 ```
 
-That's what will let the same program run on a server later, with a websocket in between.
+That's what lets the same program run on a server, with a websocket in between.
 
 The wire format is specified in [PROTOCOL.md](PROTOCOL.md).
 
 ### Using it
 
-Jorn isn't on the Elm package registry yet. To try it, clone this repo, add its `src` folder to your application's `source-directories` in `elm.json` alongside a dependency on `elm/json`, and load `client/jorn.js` in your page. [examples/todos](examples/todos) shows the wiring.
+Jorn isn't on the Elm package registry yet. To try it, clone this repo, add its `src` folder to your application's `source-directories` in `elm.json` alongside a dependency on `elm/json`, and load `client/jorn.js` in your page. For server mode, also run `npm install` in `server/`. [examples/todos](examples/todos) shows the wiring, and `examples/serve.mjs` runs it both ways.
 
 ## The problem, in plain terms
 
@@ -145,17 +159,18 @@ On the server, a small JavaScript runtime runs each connected user's session as 
 
 ## Roadmap
 
-| Stage | What | Status |
+| Version | What | Status |
 |---|---|---|
-| 1 | Pure Elm virtual DOM, diff, wire protocol, event routing | **Done** |
-| 2 | Browser patcher: apply patches to the real DOM, report events back | **Done** |
-| 3 | Full HTML and SVG coverage, keyed lists, effects, and an app runtime | **Done** (v0.1). MathML helpers come later. |
-| 4 | Server runtime (JavaScript: Node, Bun, or Deno) running a component over a websocket | Next |
-| 5 | Generated, compiler-checked encoders for shared types | Planned |
-| 6 | Session snapshots and typed migrations: deploy mid-session, nobody notices | Planned |
-| 7 | Server-side rendering, hydration, components as custom elements, test utilities | Planned |
+| v0.0 | Pure Elm virtual DOM, diff, wire protocol, event routing, and the browser patcher | **Done** |
+| v0.1 | Full HTML and SVG coverage, keyed lists, effects, and an app runtime | **Done** |
+| v0.2 | Server components: a Node runtime over a websocket, with reconnects, limits and elm/http | **Done** |
+| v0.3 | The rest of the view layer: memoized subtrees, raw HTML, MathML, HTML strings, per-event `preventDefault`, form submits | Next |
+| v0.4 | Server-side rendering and hydration, URL routing, server-sent events and polling, messaging a running app from JavaScript | Planned |
+| v0.5 | Components as custom elements: shadow DOM, slots, forms, lifecycle and contexts | Planned |
+| v0.6 | A dev server and build command, and querying and simulating apps in tests | Planned |
+| v1.0 | The full feature set, published to the Elm package registry | Planned |
 
-Stage 6 is the demo that matters. Throughout, the aim is for Jorn to be as fast as Elm allows. Feature-by-feature status is in [ROADMAP.md](ROADMAP.md).
+After 1.0 come generated encoders for shared types and typed migrations across deploys: the "no API layer" and "deploys that don't drop anyone" parts of the claim above. Throughout, the aim is for Jorn to be as fast as Elm allows. Feature-by-feature status is in [ROADMAP.md](ROADMAP.md).
 
 ## Standing on shoulders
 
