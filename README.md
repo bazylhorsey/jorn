@@ -190,10 +190,11 @@ On the server, a small JavaScript runtime runs each connected user's session as 
 | v0.3 | The rest of the view layer: memoized subtrees, raw HTML, MathML, HTML strings, per-event `preventDefault`, form submits | Next |
 | v0.4 | Server-side rendering and hydration, URL routing, server-sent events and polling, messaging a running app from JavaScript | Planned |
 | v0.5 | Components as custom elements: shadow DOM, slots, forms, lifecycle and contexts | Planned |
-| v0.6 | A dev server and build command, and querying and simulating apps in tests | Planned |
+| v0.6 | A dev server and build command, querying and simulating apps in tests, and the JavaScript written in TypeScript | Planned |
 | v1.0 | The full feature set, published to the Elm package registry | Planned |
+| After 1.0 | Generated encoders for types shared by the browser and the server, sessions kept across deploys with typed migrations, REST endpoints written in Elm, and Bun and Deno | Future work |
 
-After 1.0 come generated encoders for shared types and typed migrations across deploys: the "no API layer" and "deploys that don't drop anyone" parts of the claim above. Throughout, the aim is for Jorn to be as fast as Elm allows. Feature-by-feature status is in [ROADMAP.md](ROADMAP.md).
+Server components already need no API layer: `update` runs on the server, and only events and patches cross the network. After 1.0, generated encoders bring the same to apps running in the browser, and typed migrations let a deploy keep every session. Those finish the "no API layer" and "deploys that don't drop anyone" parts of the claim above, once the full feature set is done. Throughout, the aim is for Jorn to be as fast as Elm allows. Feature-by-feature status is in [ROADMAP.md](ROADMAP.md).
 
 ## Standing on shoulders
 
