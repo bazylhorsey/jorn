@@ -92,6 +92,7 @@ jorn.patch(patches); // after every update, with the output of Jorn.Patch.encode
 ## Behavior worth knowing
 
 - `preventDefault` and `stopPropagation` are applied synchronously when the event fires, from the options Elm sent ahead of time.
+- `debounce` and `throttle` hold events back in the page, so dropped ones are never sent. An event that isn't held goes after the held ones that fired before it.
 - Paths are worked out when an event fires, so they're correct for whatever is on screen.
 - Events the browser fires because of a patch, like the `blur` Chrome sends when a patch removes the focused element, aren't reported. They aren't the user's doing.
 - `value`, `checked` and `selected` attributes are mirrored onto the live properties, so updates still show after a user has typed or clicked. `value` is only written when it changed, so the caret stays put.

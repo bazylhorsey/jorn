@@ -40,7 +40,7 @@ Statuses: **done** is available today. **partial** is available with a stated di
 | `onClick`, `onInput`, `onCheck`, `onSubmit` | done | |
 | `preventDefault` and `stopPropagation` | done | Static, through `custom`. Deciding per event is todo. |
 | Mouse, keyboard, focus, blur, and change helpers | done | Keyboard helpers include `key`, so server components get it. |
-| Debounce and throttle | todo | |
+| Debounce and throttle | done | `Event.debounce` and `Event.throttle`. They run in the page, so dropped events never reach a server. |
 | Emitting custom events from a component | todo | |
 
 ## Wire protocol and routing

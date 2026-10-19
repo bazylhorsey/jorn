@@ -24,7 +24,7 @@ A view's root is always a single node. A fragment at the root becomes an empty t
   "children": [] }
 ```
 
-`namespace` is `""` for HTML. `attrs` are strings set with `setAttribute`. `props` are JSON values assigned to the DOM object; the client ignores the names `__proto__`, `constructor` and `prototype`, so a property can't change what kind of object an element is. `events` tell the client which listeners to install and how; the handlers themselves never leave Elm.
+`namespace` is `""` for HTML. `attrs` are strings set with `setAttribute`. `props` are JSON values assigned to the DOM object; the client ignores the names `__proto__`, `constructor` and `prototype`, so a property can't change what kind of object an element is. `events` tell the client which listeners to install and how; the handlers themselves never leave Elm. An event's options can also have `debounce` and `throttle`, in milliseconds, which are left out when they're not used (below).
 
 ## Patches
 
@@ -75,6 +75,8 @@ An `id` that matches nothing, or a `client` name nobody registered, is reported 
 ```
 
 The client applies `preventDefault` and `stopPropagation` synchronously from the listener's options, then builds `event` from the dotted paths in `include`, skipping any path that goes through `__proto__`, `constructor` or `prototype`. When Elm runs in the same page (client mode), the client can pass the live event object instead, and `include` doesn't matter. Events the browser fires as a result of applying patches, like the `blur` some browsers send when a patch removes the focused element, are not reported. In client mode, `Jorn.application` routes each event to the handler that produced it. Hosts that route events themselves can use `Jorn.ServerComponent.decodeEvent`.
+
+**Debounce and throttle.** They run in the client, after `preventDefault` and `stopPropagation`, which still apply to every event. With `debounce`, the client holds the latest event back until none has fired for that long, then sends it. With `throttle`, it sends the first event straight away and holds the latest of the rest until the interval ends, which starts the next interval. With both, `throttle` caps how long `debounce` holds an event. A held event's fields are copied when it fires and its path is worked out when it's sent, and it's dropped if its element or handler is gone by then. Any event the client sends goes after the held events that fired before it, so a submit never overtakes debounced typing.
 
 ## Client mode runtime
 

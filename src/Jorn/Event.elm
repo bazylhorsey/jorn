@@ -5,6 +5,7 @@ module Jorn.Event exposing
     , onKeydown, onKeyup, onKeypress
     , onChange, onFocus, onBlur
     , preventDefault, stopPropagation, include
+    , debounce, throttle
     , targetValue, targetChecked, key
     )
 
@@ -57,6 +58,21 @@ Keyboard handlers get the event's `key`, like `"Enter"`, `"a"` or
 # Options
 
 @docs preventDefault, stopPropagation, include
+
+
+# Rate limits
+
+These run in the page, before anything is sent, so a fast typist doesn't send
+every keystroke to a server. `preventDefault` and `stopPropagation` still apply
+to every event, including the ones that are dropped. Both take milliseconds.
+
+    Html.input [ Event.debounce 300 (Event.onInput Search) ]
+
+On one handler together, `throttle` caps how long `debounce` can hold events
+back: the last event is sent once the user pauses, and at least once per
+`throttle` while they don't.
+
+@docs debounce, throttle
 
 
 # Decoders
@@ -210,14 +226,14 @@ onBlur msg =
 -}
 preventDefault : Options msg
 preventDefault handler =
-    Vdom.Options { preventDefault = True, stopPropagation = False, include = [] } handler
+    Vdom.Options { defaultOptions | preventDefault = True } handler
 
 
 {-| Stop the event from bubbling past the element.
 -}
 stopPropagation : Options msg
 stopPropagation handler =
-    Vdom.Options { preventDefault = False, stopPropagation = True, include = [] } handler
+    Vdom.Options { defaultOptions | stopPropagation = True } handler
 
 
 {-| Send these event fields back to Elm, as dotted paths like `"target.value"`.
@@ -227,7 +243,31 @@ The field is copied off the event into plain JSON, keeping its nesting.
 -}
 include : List String -> Options msg
 include paths handler =
-    Vdom.Options { preventDefault = False, stopPropagation = False, include = paths } handler
+    Vdom.Options { defaultOptions | include = paths } handler
+
+
+{-| Wait until the events stop for this many milliseconds, then send only the
+last one. For search fields and anything else where only the final value
+matters.
+-}
+debounce : Int -> Options msg
+debounce milliseconds handler =
+    Vdom.Options { defaultOptions | debounce = milliseconds } handler
+
+
+{-| Send at most one event per this many milliseconds. The first goes
+straight away, and the latest of the ones that arrive in between goes at the
+end of the interval, so the last one is never lost. For scrolling, dragging
+and other streams of events.
+-}
+throttle : Int -> Options msg
+throttle milliseconds handler =
+    Vdom.Options { defaultOptions | throttle = milliseconds } handler
+
+
+defaultOptions : Vdom.EventOptions
+defaultOptions =
+    Vdom.defaultOptions
 
 
 {-| -}
