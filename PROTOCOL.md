@@ -86,6 +86,12 @@ An `id` that matches nothing, or a `client` name nobody registered, is reported 
 
 The client applies `preventDefault` and `stopPropagation` synchronously from the listener's options, then builds `event` from the dotted paths in `include`, skipping any path that goes through `__proto__`, `constructor` or `prototype`. When Elm runs in the same page (client mode), the client can pass the live event object instead, and `include` doesn't matter. Events the browser fires as a result of applying patches, like the `blur` some browsers send when a patch removes the focused element, are not reported. In client mode, `Jorn.application` routes each event to the handler that produced it. Hosts that route events themselves can use `Jorn.ServerComponent.decodeEvent`.
 
+**Form fields.** `formFields` in `include` isn't a field of the event: the client builds it. It finds the form, which is the event's target or the form the target belongs to, and sends the fields that form would submit as a list of `[name, value]` pairs, in order, with the button that submitted it last. Fields that are disabled, unchecked or have no name are left out, the way the browser leaves them out of a submission, and so are file inputs, since their contents can't be sent as text. An event with no form gets an empty list. In client mode the client adds `formFields` to the live event object, so the same decoder works in both modes.
+
+```json
+{ "path": [], "name": "submit", "event": { "formFields": [["email", "a@b.c"], ["plan", "pro"]] } }
+```
+
 **Debounce and throttle.** They run in the client, after `preventDefault` and `stopPropagation`, which still apply to every event. With `debounce`, the client holds the latest event back until none has fired for that long, then sends it. With `throttle`, it sends the first event straight away and holds the latest of the rest until the interval ends, which starts the next interval. With both, `throttle` caps how long `debounce` holds an event. A held event's fields are copied when it fires and its path is worked out when it's sent, and it's dropped if its element or handler is gone by then. Any event the client sends goes after the held events that fired before it, so a submit never overtakes debounced typing.
 
 ## Client mode runtime
