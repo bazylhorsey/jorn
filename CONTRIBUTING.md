@@ -31,7 +31,7 @@ If you touch `server/jorn.js` or `stream`, build `RuntimeSpec.elm` and the todos
 
 ```
 (cd server && npm install)
-(cd server/test && npm install && node run.mjs)
+(cd server/test && npm install && node run.mjs && node reconnect.mjs)
 (cd client/test && node example.mjs server)
 ```
 
@@ -42,7 +42,7 @@ If you touch `server/jorn.js` or `stream`, build `RuntimeSpec.elm` and the todos
 - `tests/DiffTest.elm` has golden tests that pin the wire format byte for byte. If you change what goes over the wire, update [PROTOCOL.md](PROTOCOL.md) in the same pull request.
 - `tests/Reference.elm` is an executable spec of the browser patcher: it applies patches to a tree in Elm, and the fuzz tests check that applying `diff a b` to `a` always gives `b`.
 - `examples/` holds runnable examples. Each is an Elm application that pulls in `../../src`, written the way an app using Jorn would be. `client/test/example.mjs` uses the todos example in jsdom.
-- `server/jorn.js` is the server runtime. `server/test/run.mjs` runs a session on its own, then pages in jsdom against a real server and real sockets.
+- `server/jorn.js` is the server runtime. `server/test/run.mjs` runs a session on its own, then pages in jsdom against a real server and real sockets. `server/test/reconnect.mjs` breaks those connections on purpose.
 - `client/jorn.js` is the browser patcher. `client/test/run.mjs` checks it in jsdom: unit tests for live form state and events, then thousands of random view sequences generated in Elm, checking the DOM after every patch and routing every event back through `Jorn.Internal.Event`. `client/test/runtime.mjs` runs a small app through `Jorn.application` and `start`, checking batching and every kind of effect.
 
 ## Style

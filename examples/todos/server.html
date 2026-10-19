@@ -32,8 +32,10 @@
 
       // The same app as index.html, running on the server instead of here.
       // This page only draws it and keeps the list in localStorage.
+      // Flags as a function: if the server restarts, the new session starts
+      // from the list as it is now, not as it was when the page loaded.
       stream(document.getElementById("app"), "socket", {
-        flags: JSON.parse(localStorage.getItem(key) ?? "[]"),
+        flags: () => JSON.parse(localStorage.getItem(key) ?? "[]"),
         effects: {
           save: (todos) => localStorage.setItem(key, JSON.stringify(todos)),
         },
