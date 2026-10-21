@@ -4,7 +4,7 @@
 
 Jorn is an attempt to build the web framework that doesn't make you choose. Today every serious option wins on one axis by giving up another. Jorn's bet is that with the right language, you can have all of them at once.
 
-> **Status: v0.2.1.** You can build apps with Jorn and run them in the browser or on a Node server: every HTML, SVG and MathML element, attributes and ARIA, keyed lists, fragments, raw HTML, effects, an app runtime, rendering to HTML strings, and server components that reconnect and catch up, on a pure Elm virtual DOM with a tested wire protocol and patcher. Memoized subtrees are next. The rest of this page describes where it's going. See the [roadmap](ROADMAP.md).
+> **Status: v0.3.** You can build apps with Jorn and run them in the browser or on a Node server: every HTML, SVG and MathML element, attributes and ARIA, keyed lists, fragments, memoized subtrees, raw HTML, handlers that decide `preventDefault` for each event, effects, an app runtime, rendering to HTML strings, and server components that reconnect and catch up, on a pure Elm virtual DOM with a tested wire protocol and patcher. URL routing and server-side rendering are next. The rest of this page describes where it's going. See the [roadmap](ROADMAP.md).
 
 ## What v0.2 gives you
 
@@ -103,14 +103,13 @@ As of v0.2, Jorn's strength is running an app on a server, or keeping that choic
 
 It's not a good choice, yet or at all, for:
 
-- **Apps that will only ever run in the browser.** Plain Elm is better there for now: Jorn has no URL routing or lazy rendering yet.
+- **Apps that will only ever run in the browser.** Plain Elm is better there for now: Jorn has no URL routing yet.
 - **Views built with elm/html libraries** like elm-ui or elm-css. They produce elm/html's `Html`, which Jorn can't render.
 - **Debugging with Elm's time-travel debugger.** It only works with `Browser` programs, and Jorn's aren't.
 - **Offline-first apps, or users on slow or flaky connections.** In server mode, every click is a round trip.
 
 Later versions widen this (see the [roadmap](#roadmap)):
 
-- **v0.3:** memoized subtrees, so large browser-only apps skip work the way elm/html's `lazy` does.
 - **v0.4:** URL routing, which makes browser-only apps a fair alternative to plain Elm. Also server-side rendering, for content sites with interactive parts, and sessions that can talk to each other, for chat and other live multi-user apps.
 - **v0.5:** custom elements, for sharing Elm components with teams on React or Vue.
 
@@ -188,8 +187,8 @@ On the server, a small JavaScript runtime runs each connected user's session as 
 | v0.1 | Full HTML and SVG coverage, keyed lists, effects, and an app runtime | **Done** |
 | v0.2 | Server components: a Node runtime over a websocket, with reconnects, limits and elm/http | **Done** |
 | v0.2.1 | MathML elements, raw HTML, rendering to HTML strings, and form submits with their fields | **Done** |
-| v0.3 | The rest of the view layer: memoized subtrees and per-event `preventDefault` | Next |
-| v0.4 | Server-side rendering and hydration, URL routing, server-sent events and polling, messaging a running app from JavaScript | Planned |
+| v0.3 | The rest of the view layer: memoized subtrees and per-event `preventDefault` | **Done** |
+| v0.4 | Server-side rendering and hydration, URL routing, server-sent events and polling, messaging a running app from JavaScript | Next |
 | v0.5 | Components as custom elements: shadow DOM, slots, forms, lifecycle and contexts | Planned |
 | v0.6 | A dev server and build command, querying and simulating apps in tests, and the JavaScript written in TypeScript | Planned |
 | v1.0 | The full feature set, published to the Elm package registry | Planned |
