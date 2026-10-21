@@ -3,6 +3,7 @@
 ## Unreleased
 
 - `Event.advanced` makes a handler whose decoder decides, for each event, whether to call `preventDefault` and `stopPropagation`, for cases like preventing the default only when Enter is pressed (#8). It decodes a `Handler`, the message with the two decisions, the way elm/html's `custom` does. The decisions add to the handler's options, which still apply. It's for client mode: the page asks the program as the event fires, and the program answers before the listener returns. In server mode the answer would come too late, so the page doesn't ask, only the options apply, and the message still arrives. On the wire an advanced handler's options have `"advanced": true`, left out otherwise, so every other handler encodes as before.
+- `Element.memo` makes part of a view that's only built again when its dependencies change, like elm/html's `lazy` (#11). The dependencies are JSON values, compared by their encoding, since Elm can't compare values of different types. While they're the same, Jorn doesn't call the function or diff what it built, and routing an event into it doesn't build it either: the runtime keeps each memo as it was last built. When they change, it's built once. A memo stands for one node, and changes nothing on the wire. `Element.map` stops at a memo, which maps what it builds when it builds it. The todos example memoizes its items, and a new client test counts how often each row of a 100-row list is built.
 
 ## v0.2.1 (2026-10-19)
 

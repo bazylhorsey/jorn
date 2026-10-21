@@ -79,6 +79,9 @@ shape mode element =
         Keyed _ wrapped ->
             shape mode wrapped
 
+        Memo _ view ->
+            shape mode (Vdom.root (view ()))
+
         Element namespace tag closing attributes children ->
             if validTag tag then
                 let

@@ -1,4 +1,4 @@
-module Jorn.Internal.Patch exposing (Patch(..), Path, diff, encode, encodePatch)
+module Jorn.Internal.Patch exposing (Patch(..), Path, diff, diffKeeping, encode, encodePatch)
 
 {-| The diff runs identically on the server and in the browser, which is the
 point: one rendering path, one protocol, one client patcher.
@@ -11,6 +11,10 @@ every patch aimed at its existing children.
 Keyed children are the exception to that order: their `remove`, `move` and
 `insert` patches come first, each index valid at the moment it's applied, and
 the patches for the children themselves follow, at their final positions.
+
+Memos are where the diff saves work. Two memos in the same place with the same
+dependencies are neither built nor compared. Otherwise a memo is built and
+diffed like any other subtree, and what it built is kept (see `diffKeeping`).
 
 -}
 
@@ -46,39 +50,78 @@ type Patch
 
 diff : Element msg -> Element msg -> List Patch
 diff old new =
-    List.reverse (diffHelp [] (Vdom.root old) (Vdom.root new) [])
+    Tuple.first (diffKeeping old new)
+
+
+{-| The patches, and the new tree with every memo it had to build kept in it
+(see `Vdom.build`), along with the memos it skipped, which keep what they built
+before. The runtime diffs against that next time and routes events through
+it, so no memo is built twice for the same dependencies.
+-}
+diffKeeping : Element msg -> Element msg -> ( List Patch, Element msg )
+diffKeeping old new =
+    let
+        newRoot =
+            Vdom.root new
+
+        ( patches, kept ) =
+            diffHelp [] (Vdom.root old) newRoot []
+    in
+    ( List.reverse patches, Maybe.withDefault newRoot kept )
 
 
 {-| `reversedPath` and the accumulator are both built backwards for cheap
 consing; each is reversed exactly once. Neither tree is a fragment here: the
 root has been resolved and children are flattened before they're compared.
+
+Alongside the patches comes the new tree with its memos kept, or `Nothing`
+when there were no memos in it and it stays as it is.
+
 -}
-diffHelp : List Int -> Element msg -> Element msg -> List Patch -> List Patch
+diffHelp : List Int -> Element msg -> Element msg -> List Patch -> ( List Patch, Maybe (Element msg) )
 diffHelp reversedPath old new acc =
     case ( old, new ) of
+        ( Memo oldKey oldView, Memo newKey newView ) ->
+            if oldKey == newKey then
+                ( acc, Just old )
+
+            else
+                diffMemo reversedPath (Vdom.root (oldView ())) newKey newView acc
+
+        ( Memo _ oldView, _ ) ->
+            diffHelp reversedPath (Vdom.root (oldView ())) new acc
+
+        ( _, Memo newKey newView ) ->
+            diffMemo reversedPath old newKey newView acc
+
         ( Text a, Text b ) ->
             if a == b then
-                acc
+                ( acc, Nothing )
 
             else
-                SetText (List.reverse reversedPath) b :: acc
+                ( SetText (List.reverse reversedPath) b :: acc, Nothing )
 
-        ( Element oldNs oldTag _ oldAttrs oldKids, Element newNs newTag _ newAttrs newKids ) ->
+        ( Element oldNs oldTag _ oldAttrs oldKids, Element newNs newTag newClosing newAttrs newKids ) ->
             if oldNs == newNs && oldTag == newTag then
-                (case ( oldAttrs, newAttrs ) of
-                    -- Fast path: most elements have no attributes, and building
-                    -- and merging three empty dictionaries per element was the
-                    -- dominant cost of the diff.
-                    ( [], [] ) ->
-                        acc
+                let
+                    withFacts =
+                        case ( oldAttrs, newAttrs ) of
+                            -- Fast path: most elements have no attributes, and building
+                            -- and merging three empty dictionaries per element was the
+                            -- dominant cost of the diff.
+                            ( [], [] ) ->
+                                acc
 
-                    _ ->
-                        diffFacts (List.reverse reversedPath) (Vdom.facts oldAttrs) (Vdom.facts newAttrs) acc
-                )
-                    |> diffList reversedPath (Vdom.flatten oldKids) (Vdom.flatten newKids)
+                            _ ->
+                                diffFacts (List.reverse reversedPath) (Vdom.facts oldAttrs) (Vdom.facts newAttrs) acc
+
+                    ( patches, kids ) =
+                        diffList reversedPath (Vdom.flatten oldKids) (Vdom.flatten newKids) withFacts
+                in
+                ( patches, Maybe.map (Element newNs newTag newClosing newAttrs) kids )
 
             else
-                Replace (List.reverse reversedPath) (Vdom.toNode new) :: acc
+                replace reversedPath new acc
 
         ( Raw oldNs oldTag oldAttrs oldHtml, Raw newNs newTag newAttrs newHtml ) ->
             if oldNs == newNs && oldTag == newTag then
@@ -90,25 +133,59 @@ diffHelp reversedPath old new acc =
                         diffFacts path (Vdom.facts oldAttrs) (Vdom.facts newAttrs) acc
                 in
                 if oldHtml == newHtml then
-                    withFacts
+                    ( withFacts, Nothing )
 
                 else
-                    SetHtml path newHtml :: withFacts
+                    ( SetHtml path newHtml :: withFacts, Nothing )
 
             else
-                Replace (List.reverse reversedPath) (Vdom.toNode new) :: acc
+                replace reversedPath new acc
 
         _ ->
-            Replace (List.reverse reversedPath) (Vdom.toNode new) :: acc
+            replace reversedPath new acc
 
 
-diffList : List Int -> List (Element msg) -> List (Element msg) -> List Patch -> List Patch
+{-| Build a memo whose dependencies changed, or that wasn't there before, and
+diff what it builds against what was there.
+-}
+diffMemo : List Int -> Element msg -> String -> (() -> Element msg) -> List Patch -> ( List Patch, Maybe (Element msg) )
+diffMemo reversedPath old key view acc =
+    let
+        built =
+            Vdom.root (view ())
+
+        ( patches, kept ) =
+            diffHelp reversedPath old built acc
+
+        content =
+            Maybe.withDefault built kept
+    in
+    ( patches, Just (Memo key (\() -> content)) )
+
+
+replace : List Int -> Element msg -> List Patch -> ( List Patch, Maybe (Element msg) )
+replace reversedPath new acc =
+    let
+        kept =
+            Vdom.build new
+    in
+    ( Replace (List.reverse reversedPath) (Vdom.toNode (Maybe.withDefault new kept)) :: acc, kept )
+
+
+{-| The patches for a list of children, and the children with what was kept of
+them (see `keepChildren`).
+-}
+diffList : List Int -> List (Element msg) -> List (Element msg) -> List Patch -> ( List Patch, Maybe (List (Element msg)) )
 diffList reversedPath olds news acc =
-    if List.any isKeyed olds || List.any isKeyed news then
-        diffKeyed reversedPath olds news acc
+    let
+        ( patches, kept ) =
+            if List.any isKeyed olds || List.any isKeyed news then
+                diffKeyed reversedPath olds news acc
 
-    else
-        diffChildren reversedPath 0 olds news acc
+            else
+                diffChildren reversedPath 0 olds news ( acc, [] )
+    in
+    ( patches, keepChildren kept news )
 
 
 isKeyed : Element msg -> Bool
@@ -121,20 +198,88 @@ isKeyed html =
             False
 
 
-diffChildren : List Int -> Int -> List (Element msg) -> List (Element msg) -> List Patch -> List Patch
-diffChildren reversedPath index olds news acc =
+{-| What was kept of the children at some positions, put in their places under
+their keys, or `Nothing` if nothing was kept and the children stay as they are.
+-}
+keepChildren : List ( Int, Element msg ) -> List (Element msg) -> Maybe (List (Element msg))
+keepChildren kept children =
+    if List.isEmpty kept then
+        Nothing
+
+    else
+        let
+            byPosition =
+                Dict.fromList kept
+        in
+        Just
+            (List.indexedMap
+                (\index child ->
+                    case ( Dict.get index byPosition, child ) of
+                        ( Just replacement, Keyed key _ ) ->
+                            Keyed key replacement
+
+                        ( Just replacement, _ ) ->
+                            replacement
+
+                        ( Nothing, _ ) ->
+                            child
+                )
+                children
+            )
+
+
+keep : Int -> Maybe (Element msg) -> List ( Int, Element msg ) -> List ( Int, Element msg )
+keep index child kept =
+    case child of
+        Just c ->
+            ( index, c ) :: kept
+
+        Nothing ->
+            kept
+
+
+diffChildren : List Int -> Int -> List (Element msg) -> List (Element msg) -> ( List Patch, List ( Int, Element msg ) ) -> ( List Patch, List ( Int, Element msg ) )
+diffChildren reversedPath index olds news ( acc, kept ) =
     case ( olds, news ) of
         ( o :: os, n :: ns ) ->
-            diffChildren reversedPath (index + 1) os ns (diffHelp (index :: reversedPath) o n acc)
+            let
+                ( patches, child ) =
+                    diffHelp (index :: reversedPath) o n acc
+            in
+            diffChildren reversedPath (index + 1) os ns ( patches, keep index child kept )
 
         ( [], [] ) ->
-            acc
+            ( acc, kept )
 
         ( [], _ ) ->
-            Append (List.reverse reversedPath) (List.map Vdom.toNode news) :: acc
+            let
+                ( nodes, built ) =
+                    buildNodes index news kept
+            in
+            ( Append (List.reverse reversedPath) nodes :: acc, built )
 
         ( _, [] ) ->
-            Truncate (List.reverse reversedPath) index :: acc
+            ( Truncate (List.reverse reversedPath) index :: acc, kept )
+
+
+{-| The nodes for new children, starting at `first`, keeping their memos.
+-}
+buildNodes : Int -> List (Element msg) -> List ( Int, Element msg ) -> ( List Node, List ( Int, Element msg ) )
+buildNodes first children kept =
+    let
+        ( _, nodes, keptAll ) =
+            List.foldl
+                (\child ( index, acc, k ) ->
+                    let
+                        built =
+                            Vdom.build child
+                    in
+                    ( index + 1, Vdom.toNode (Maybe.withDefault child built) :: acc, keep index built k )
+                )
+                ( first, [], kept )
+                children
+    in
+    ( List.reverse nodes, keptAll )
 
 
 
@@ -153,7 +298,7 @@ keeps the moves to a minimum. Finally, diff each surviving child against its
 old self, at its final position.
 
 -}
-diffKeyed : List Int -> List (Element msg) -> List (Element msg) -> List Patch -> List Patch
+diffKeyed : List Int -> List (Element msg) -> List (Element msg) -> List Patch -> ( List Patch, List ( Int, Element msg ) )
 diffKeyed reversedPath olds news acc =
     let
         path =
@@ -163,10 +308,10 @@ diffKeyed reversedPath olds news acc =
             Vdom.keys olds
 
         newPairs =
-            Vdom.keys news
+            List.indexedMap Tuple.pair (Vdom.keys news)
 
         newKeys =
-            Set.fromList (List.map Tuple.first newPairs)
+            Set.fromList (List.map (Tuple.second >> Tuple.first) newPairs)
 
         oldByKey =
             Dict.fromList oldPairs
@@ -185,50 +330,60 @@ diffKeyed reversedPath olds news acc =
 
         stable =
             newPairs
-                |> List.filterMap (\( key, _ ) -> Dict.get key keptPosition |> Maybe.map (Tuple.pair key))
+                |> List.filterMap (\( _, ( key, _ ) ) -> Dict.get key keptPosition |> Maybe.map (Tuple.pair key))
                 |> longestIncreasing
 
         afterRemovals =
             List.foldr (\index a -> Remove path index :: a) acc removed
 
         ( afterMoves, _, _ ) =
-            List.foldr (place path oldByKey stable) ( afterRemovals, kept, Nothing ) newPairs
+            List.foldr (place path oldByKey stable) ( ( afterRemovals, [] ), kept, Nothing ) newPairs
     in
     newPairs
-        |> List.indexedMap Tuple.pair
         |> List.foldl
-            (\( index, ( key, new ) ) a ->
+            (\( index, ( key, new ) ) ( a, k ) ->
                 case Dict.get key oldByKey of
                     Just old ->
-                        diffHelp (index :: reversedPath) old new a
+                        let
+                            ( patches, child ) =
+                                diffHelp (index :: reversedPath) old new a
+                        in
+                        ( patches, keep index child k )
 
                     Nothing ->
-                        a
+                        ( a, k )
             )
             afterMoves
 
 
 {-| Put one child in place, directly before the child that follows it in the
 new list (`anchor`), which is already placed. `current` is the order of keys
-on screen as the patches so far leave it.
+on screen as the patches so far leave it. A child that is new is built, and
+what it built is kept at its final position, `index`.
 -}
 place :
     Path
     -> Dict String (Element msg)
     -> Set String
-    -> ( String, Element msg )
-    -> ( List Patch, List String, Maybe String )
-    -> ( List Patch, List String, Maybe String )
-place path oldByKey stable ( key, new ) ( acc, current, anchor ) =
+    -> ( Int, ( String, Element msg ) )
+    -> ( ( List Patch, List ( Int, Element msg ) ), List String, Maybe String )
+    -> ( ( List Patch, List ( Int, Element msg ) ), List String, Maybe String )
+place path oldByKey stable ( index, ( key, new ) ) ( ( acc, built ), current, anchor ) =
     if not (Dict.member key oldByKey) then
         let
-            index =
+            at =
                 anchorIndex anchor current
+
+            kept =
+                Vdom.build new
         in
-        ( Insert path index (Vdom.toNode new) :: acc, insertAt index key current, Just key )
+        ( ( Insert path at (Vdom.toNode (Maybe.withDefault new kept)) :: acc, keep index kept built )
+        , insertAt at key current
+        , Just key
+        )
 
     else if Set.member key stable then
-        ( acc, current, Just key )
+        ( ( acc, built ), current, Just key )
 
     else
         let
@@ -242,10 +397,10 @@ place path oldByKey stable ( key, new ) ( acc, current, anchor ) =
                 anchorIndex anchor without
         in
         if from == to then
-            ( acc, current, Just key )
+            ( ( acc, built ), current, Just key )
 
         else
-            ( Move path from to :: acc, insertAt to key without, Just key )
+            ( ( Move path from to :: acc, built ), insertAt to key without, Just key )
 
 
 anchorIndex : Maybe String -> List String -> Int

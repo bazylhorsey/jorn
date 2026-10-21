@@ -17,6 +17,7 @@ The same program also runs on the server. Install the server's dependencies once
 - **Flags and a client effect.** The page passes the saved list in as flags. Whenever the list changes, `update` returns `Effect.client "save"`, which calls the `save` function the page registered.
 - **Focus as an effect.** Edit returns `Effect.focus`, which runs right after the patch that creates the edit field.
 - **Keyed children.** The list is a `Keyed.ul`, so filtering and deleting add and remove items around the others instead of rewriting every item after the change.
+- **Memoized items.** Each item is an `Element.memo` on its todo, encoded with the same `encodeTodo` that saves the list, so a render only builds and diffs the items that changed.
 - **Forms and the keyboard.** `onSubmit` (which keeps the page from reloading), `onInput`, `onCheck`, `onBlur`, and `onKeydown` to cancel an edit with Escape.
 - **SVG.** The progress ring is drawn with `Jorn.Element.Svg`.
 - **ARIA.** The ring is a `progressbar` with its values, the filter buttons say which one is pressed, and the count is a live region.

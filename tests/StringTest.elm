@@ -130,8 +130,13 @@ attributes =
 
 structure : Test
 structure =
-    describe "fragments and keys"
-        [ test "fragments are spliced into their parent" <|
+    describe "fragments, keys and memos"
+        [ test "a memo renders what it builds" <|
+            \_ ->
+                Html.ul [] [ Element.memo [ Encode.int 1 ] (\() -> Html.li [] [ Element.text "a" ]) ]
+                    |> Element.toString
+                    |> Expect.equal "<ul><li>a</li></ul>"
+        , test "fragments are spliced into their parent" <|
             \_ ->
                 Html.ul [] [ Element.fragment [ Html.li [] [], Element.none, Element.fragment [ Html.li [] [] ] ] ]
                     |> Element.toString

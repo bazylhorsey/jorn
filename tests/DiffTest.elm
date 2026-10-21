@@ -13,7 +13,7 @@ import Jorn.Patch
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Reference
-import Test exposing (Test, describe, fuzz, fuzz2, test)
+import Test exposing (Test, describe, fuzz, fuzz2, fuzz3, test)
 
 
 suite : Test
@@ -22,6 +22,7 @@ suite =
         [ unit
         , keyed
         , raw
+        , memos
         , wire
         , properties
         ]
@@ -494,6 +495,90 @@ raw =
         ]
 
 
+memos : Test
+memos =
+    describe "memo"
+        [ test "a memo with the same dependencies is neither built nor diffed" <|
+            \_ ->
+                Jorn.Patch.diff
+                    (Html.div [] [ Element.memo [ Encode.int 1, Encode.string "a" ] (\() -> Debug.todo "built the old memo") ])
+                    (Html.div [] [ Element.memo [ Encode.int 1, Encode.string "a" ] (\() -> Debug.todo "built the new memo") ])
+                    |> expectPatches []
+        , test "a memo with new dependencies is built and diffed" <|
+            \_ ->
+                Jorn.Patch.diff
+                    (Html.div [] [ Element.memo [ Encode.int 1 ] (\() -> Html.p [] [ Element.text "one" ]) ])
+                    (Html.div [] [ Element.memo [ Encode.int 2 ] (\() -> Html.p [] [ Element.text "two" ]) ])
+                    |> expectPatches [ SetText [ 0, 0 ] "two" ]
+        , test "a memo diffs against what was there before it" <|
+            \_ ->
+                Jorn.Patch.diff
+                    (Html.div [] [ Html.p [] [ Element.text "one" ] ])
+                    (Html.div [] [ Element.memo [] (\() -> Html.p [] [ Element.text "two" ]) ])
+                    |> expectPatches [ SetText [ 0, 0 ] "two" ]
+        , test "and what replaces it diffs against what it built" <|
+            \_ ->
+                Jorn.Patch.diff
+                    (Html.div [] [ Element.memo [] (\() -> Html.p [] [ Element.text "one" ]) ])
+                    (Html.div [] [ Html.p [] [ Element.text "two" ] ])
+                    |> expectPatches [ SetText [ 0, 0 ] "two" ]
+        , test "a memo is what it builds on the wire" <|
+            \_ ->
+                node (Html.div [] [ Element.memo [] (\() -> Html.p [ Attr.class "x" ] [ Element.text "a" ]) ])
+                    |> Expect.equal (node (Html.div [] [ Html.p [ Attr.class "x" ] [ Element.text "a" ] ]))
+        , test "a memo stands for one node, like a whole view" <|
+            \_ ->
+                node (Html.div [] [ Element.memo [] (\() -> Element.fragment [ Element.text "a", Element.text "b" ]), Element.memo [] (\() -> Element.none) ])
+                    |> Expect.equal
+                        (node
+                            (Html.div []
+                                [ Vdom.Element "" "jorn-fragment" Vdom.Normal [ Attr.style "display" "contents" ] [ Element.text "a", Element.text "b" ]
+                                , Element.text ""
+                                ]
+                            )
+                        )
+        , test "map doesn't build a memo" <|
+            \_ ->
+                Jorn.Patch.diff
+                    (Element.map String.length (Html.div [] [ Element.memo [] (\() -> Debug.todo "built the old memo") ]))
+                    (Element.map String.length (Html.div [] [ Element.memo [] (\() -> Debug.todo "built the new memo") ]))
+                    |> expectPatches []
+        , test "keyed memos move without being built" <|
+            \_ ->
+                Jorn.Patch.diff
+                    (Keyed.ul [] [ ( "a", Element.memo [ Encode.string "a" ] (\() -> Debug.todo "built a") ), ( "b", Element.memo [ Encode.string "b" ] (\() -> Debug.todo "built b") ) ])
+                    (Keyed.ul [] [ ( "b", Element.memo [ Encode.string "b" ] (\() -> Debug.todo "built b again") ), ( "a", Element.memo [ Encode.string "a" ] (\() -> Debug.todo "built a again") ) ])
+                    |> expectPatches [ Move [] 1 0 ]
+        , test "the tree the diff keeps has what its memos built" <|
+            \_ ->
+                let
+                    ( _, kept ) =
+                        Jorn.Internal.Patch.diffKeeping
+                            (Html.div [] [])
+                            (Html.div [] [ Element.memo [ Encode.int 1 ] (\() -> Html.p [] [ Element.text "one" ]) ])
+                in
+                Jorn.Patch.diff kept (Html.div [] [ Element.memo [ Encode.int 2 ] (\() -> Html.p [] [ Element.text "two" ]) ])
+                    |> expectPatches [ SetText [ 0, 0 ] "two" ]
+        , test "a memo the diff skips keeps what it built before" <|
+            \_ ->
+                let
+                    ( _, first ) =
+                        Jorn.Internal.Patch.diffKeeping
+                            (Html.div [] [])
+                            (Html.div [] [ Element.memo [ Encode.int 1 ] (\() -> Html.p [] [ Element.text "one" ]) ])
+
+                    -- This view breaks the rule and changes without its
+                    -- dependencies. The page still shows "one", and only the
+                    -- memo the diff kept knows that.
+                    ( _, second ) =
+                        Jorn.Internal.Patch.diffKeeping first
+                            (Html.div [] [ Element.memo [ Encode.int 1 ] (\() -> Html.p [] [ Element.text "two" ]) ])
+                in
+                Jorn.Patch.diff second (Html.div [] [ Element.memo [ Encode.int 2 ] (\() -> Html.p [] [ Element.text "two" ]) ])
+                    |> expectPatches [ SetText [ 0, 0 ] "two" ]
+        ]
+
+
 wire : Test
 wire =
     describe "wire format"
@@ -588,6 +673,16 @@ properties =
         , fuzz (html 4) "diffing a tree against itself is empty" <|
             \a ->
                 Jorn.Patch.diff a a |> expectPatches []
+        , fuzz3 (html 3) (html 3) (html 3) "the tree the diff keeps diffs like the new one" <|
+            \a b c ->
+                let
+                    ( patches, kept ) =
+                        Jorn.Internal.Patch.diffKeeping a b
+                in
+                Reference.apply patches (Vdom.toNode a)
+                    |> Maybe.andThen (Reference.apply (Jorn.Patch.diff kept c))
+                    |> Maybe.map Reference.render
+                    |> Expect.equal (Just (Reference.render (Vdom.toNode c)))
         , fuzz2 (html 3) (html 3) "the round trip holds through map" <|
             \a b ->
                 let
@@ -637,7 +732,16 @@ html depth =
                     (Fuzz.listOfLengthBetween 0 2 attribute)
                     (Fuzz.listOfLengthBetween 0 5 (keyedChild (depth - 1)))
               )
+            , ( 1, Fuzz.map memoOf (html (depth - 1)) )
             ]
+
+
+{-| A memo whose dependencies say exactly what it builds, as the rule asks,
+so the same subtree in the same place in both trees is skipped.
+-}
+memoOf : Element msg -> Element msg
+memoOf content =
+    Element.memo [ Jorn.Patch.encodeHtml content ] (\() -> content)
 
 
 {-| Mostly keyed, from a small alphabet so keys repeat and lists overlap, with

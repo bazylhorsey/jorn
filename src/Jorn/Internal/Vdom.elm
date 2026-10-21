@@ -6,6 +6,7 @@ module Jorn.Internal.Vdom exposing
     , Facts
     , Handler
     , Node(..)
+    , build
     , defaultOptions
     , encodeNode
     , encodeOptions
@@ -27,6 +28,9 @@ stay private while tests and sibling modules can still see them.
 walks). `Node` is the msg-free projection of it: pure data, safe to serialize,
 and what every patch and mount payload is made of.
 
+A `Memo` is a subtree that isn't built until something needs it. Its first
+field is its dependencies, encoded as one string, and its second builds it.
+
 -}
 
 import Dict exposing (Dict)
@@ -43,6 +47,7 @@ type Element msg
     | Text String
     | Fragment (List (Element msg))
     | Keyed String (Element msg)
+    | Memo String (() -> Element msg)
 
 
 {-| How an element's tags are written as HTML. Only rendering to a string
@@ -347,6 +352,9 @@ wire, so a fragment at the root needs a stand-in: with no children it's an
 empty text node, with one it's that child, and with several they're wrapped in
 a `jorn-fragment` element styled `display: contents`, which leaves layout as
 if the wrapper weren't there. A key at the root means nothing and is dropped.
+
+A memo stands for one node too, so what it builds goes through this as well.
+
 -}
 root : Element msg -> Element msg
 root html =
@@ -367,6 +375,66 @@ root html =
 
         _ ->
             html
+
+
+{-| Build every memo in a tree, and keep what each one built in its place, so
+walking the tree again, to diff it, route an event through it or encode it,
+doesn't build them again. `Nothing` when the tree has no memos, so it can stay
+as it is.
+-}
+build : Element msg -> Maybe (Element msg)
+build html =
+    case html of
+        Memo key view ->
+            let
+                built =
+                    root (view ())
+
+                content =
+                    Maybe.withDefault built (build built)
+            in
+            Just (Memo key (\() -> content))
+
+        Element namespace tag closing attributes children ->
+            buildAll children
+                |> Maybe.map (Element namespace tag closing attributes)
+
+        Fragment children ->
+            buildAll children
+                |> Maybe.map Fragment
+
+        Keyed key wrapped ->
+            build wrapped
+                |> Maybe.map (Keyed key)
+
+        Text _ ->
+            Nothing
+
+        Raw _ _ _ _ ->
+            Nothing
+
+
+buildAll : List (Element msg) -> Maybe (List (Element msg))
+buildAll children =
+    let
+        ( builtAny, built ) =
+            List.foldr
+                (\child ( any, acc ) ->
+                    case build child of
+                        Just b ->
+                            ( True, b :: acc )
+
+                        Nothing ->
+                            ( any, child :: acc )
+                )
+                ( False, [] )
+                children
+    in
+    if builtAny then
+        Just built
+
+    else
+        Nothing
 
 
 
@@ -400,6 +468,9 @@ toNode html =
 
         Keyed _ wrapped ->
             toNode wrapped
+
+        Memo _ view ->
+            toNode (root (view ()))
 
         Element namespace tag _ attributes children ->
             let
@@ -488,7 +559,8 @@ onlyIf used field =
 
 
 {-| Eager: walks the subtree and wraps every decoder. elm/html makes `map`
-lazy with kernel code, which a pure package can't do. Lazy map is on the roadmap.
+lazy with kernel code, which a pure package can't do. A memo is the
+exception: mapping it maps what it builds, when it builds it.
 -}
 map : (a -> b) -> Element a -> Element b
 map f html =
@@ -507,6 +579,9 @@ map f html =
 
         Keyed key wrapped ->
             Keyed key (map f wrapped)
+
+        Memo key view ->
+            Memo key (\() -> map f (view ()))
 
 
 mapAttribute : (a -> b) -> Attribute a -> Attribute b
