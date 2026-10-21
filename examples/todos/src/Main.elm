@@ -266,20 +266,27 @@ viewTodo editing todo =
             viewItem todo
 
 
+{-| Built again only when the todo changes, so a render builds just the items
+that did. The todo is everything the item shows, and the encoder that saves
+it already says what it is.
+-}
 viewItem : Todo -> Element Msg
 viewItem todo =
-    Html.li [ Attr.classes [ ( "done", todo.done ) ] ]
-        [ Html.label []
-            [ Html.input
-                [ Attr.type_ "checkbox"
-                , Attr.checked todo.done
-                , Event.onCheck (Toggle todo.id)
+    Element.memo [ encodeTodo todo ]
+        (\() ->
+            Html.li [ Attr.classes [ ( "done", todo.done ) ] ]
+                [ Html.label []
+                    [ Html.input
+                        [ Attr.type_ "checkbox"
+                        , Attr.checked todo.done
+                        , Event.onCheck (Toggle todo.id)
+                        ]
+                    , Element.text todo.title
+                    ]
+                , Html.button [ Attr.ariaLabel ("Edit " ++ todo.title), Event.onClick (Edit todo) ] [ Element.text "Edit" ]
+                , Html.button [ Attr.ariaLabel ("Delete " ++ todo.title), Event.onClick (Delete todo.id) ] [ Element.text "×" ]
                 ]
-            , Element.text todo.title
-            ]
-        , Html.button [ Attr.ariaLabel ("Edit " ++ todo.title), Event.onClick (Edit todo) ] [ Element.text "Edit" ]
-        , Html.button [ Attr.ariaLabel ("Delete " ++ todo.title), Event.onClick (Delete todo.id) ] [ Element.text "×" ]
-        ]
+        )
 
 
 viewEditor : Editing -> Element Msg

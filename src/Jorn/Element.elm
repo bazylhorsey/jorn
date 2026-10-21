@@ -2,6 +2,7 @@ module Jorn.Element exposing
     ( Element
     , element, namespaced, text, map
     , none, fragment
+    , memo
     , advanced, Closing(..)
     , unsafeRawHtml
     , toString, toDocumentString, toReadableString
@@ -27,6 +28,11 @@ patches to one.
 @docs none, fragment
 
 
+# Skipping work
+
+@docs memo
+
+
 # Full control
 
 @docs advanced, Closing
@@ -46,6 +52,7 @@ patches to one.
 import Jorn.Attribute exposing (Attribute)
 import Jorn.Internal.Html as Html
 import Jorn.Internal.Vdom as Vdom
+import Json.Encode as Encode exposing (Value)
 
 
 {-| A node in the tree, producing messages of type `msg`.
@@ -77,7 +84,8 @@ text =
 
 {-| Transform the messages produced by a subtree.
 
-This walks the subtree eagerly, so prefer mapping near the leaves.
+This walks the subtree eagerly, so prefer mapping near the leaves. It stops
+at a `memo`, which maps what it builds when it builds it.
 
 -}
 map : (a -> b) -> Element a -> Element b
@@ -122,6 +130,42 @@ styled `display: contents`, which leaves layout as if it weren't there.
 fragment : List (Element msg) -> Element msg
 fragment =
     Vdom.Fragment
+
+
+{-| Part of a view that's only built again when what it depends on changes:
+
+    viewTodo : Todo -> Element Msg
+    viewTodo todo =
+        Element.memo
+            [ Encode.int todo.id, Encode.string todo.title, Encode.bool todo.done ]
+            (\() -> Html.li [] [ ... ])
+
+While the dependencies are the same as last time, Jorn doesn't call the
+function and doesn't diff what it built, so the subtree costs nothing however
+big it is. When they change, Jorn builds it once and diffs it like any other
+subtree. On a list where one item changes, only that item is built.
+
+The dependencies are JSON values, compared by their encoding, since Elm can't
+compare values of different types in one list. Encoders you already have
+work: `Element.memo [ encodeTodos model.todos ] ...`. They're encoded each
+time the view runs, so a memo pays off when its subtree costs more to build
+than its dependencies cost to encode.
+
+The function should only use what's in the dependencies. Anything else it
+uses, like another part of the model, stays as it was the last time it was
+built, and so do its handlers and any `map` around the memo. Only the
+dependencies are compared, so two memos in the same place with the same
+dependencies count as the same one.
+
+A memo changes nothing on the wire. It stands for one node: if the function
+gives a fragment, the fragment is wrapped the way it would be as a whole view
+(see `fragment`). `map` over a memo doesn't walk it: the mapping happens when
+it's built.
+
+-}
+memo : List Value -> (() -> Element msg) -> Element msg
+memo dependencies view =
+    Vdom.Memo (Encode.encode 0 (Encode.list identity dependencies)) view
 
 
 {-| An element with full control over how it's built: its namespace (`""`

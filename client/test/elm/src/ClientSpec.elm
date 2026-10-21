@@ -13,6 +13,7 @@ import Jorn.Attribute as Attr
 import Jorn.Element
 import Jorn.Event as Events
 import Jorn.Internal.Event as Routing
+import Jorn.Internal.Patch
 import Jorn.Internal.Vdom as Vdom exposing (Element(..))
 import Jorn.Patch
 import Json.Decode as Decode
@@ -62,15 +63,21 @@ update msg model =
             , out
                 (Encode.list
                     (\( a, b, c ) ->
+                        let
+                            -- As the runtime does: B as the diff from A
+                            -- kept it, with its memos built, diffs to C.
+                            ( ab, keptB ) =
+                                Jorn.Internal.Patch.diffKeeping a b
+                        in
                         Encode.object
                             [ ( "a", Jorn.Patch.encodeHtml a )
                             , ( "b", Jorn.Patch.encodeHtml b )
                             , ( "c", Jorn.Patch.encodeHtml c )
                             , ( "html", Encode.list (Encode.string << Jorn.Element.toString) [ a, b, c ] )
-                            , ( "ab", Jorn.Patch.encode (Jorn.Patch.diff a b) )
-                            , ( "bc", Jorn.Patch.encode (Jorn.Patch.diff b c) )
+                            , ( "ab", Jorn.Patch.encode ab )
+                            , ( "bc", Jorn.Patch.encode (Jorn.Patch.diff keptB c) )
                             , ( "keepAB", encodeSurvivors (survivors a b) )
-                            , ( "keepBC", encodeSurvivors (survivors b c) )
+                            , ( "keepBC", encodeSurvivors (survivors keptB c) )
                             ]
                     )
                     labelled
@@ -137,6 +144,9 @@ mutate html =
 
         Keyed key kid ->
             Random.map (Keyed key) (mutate kid)
+
+        Memo _ view ->
+            Random.map memoOf (mutate (view ()))
 
         Raw ns tag attrs content ->
             Random.weighted ( 6, Random.constant html )
@@ -253,7 +263,7 @@ tree depth =
         text
 
     else
-        Random.weighted ( 1, text ) [ ( 3, element depth ), ( 1, fragment depth ), ( 1, keyedList depth ), ( 0.5, raw ) ]
+        Random.weighted ( 1, text ) [ ( 3, element depth ), ( 1, fragment depth ), ( 1, keyedList depth ), ( 0.5, raw ), ( 0.5, memo depth ) ]
             |> Random.andThen identity
 
 
@@ -283,6 +293,19 @@ fragment depth =
     Random.int 0 3
         |> Random.andThen (\n -> Random.list n (tree (depth - 1)))
         |> Random.map Fragment
+
+
+{-| A memo whose dependencies say exactly what it builds, as they should, so
+the same subtree in the same place in consecutive views is skipped.
+-}
+memo : Int -> Generator (Vdom.Element ())
+memo depth =
+    Random.map memoOf (tree (depth - 1))
+
+
+memoOf : Vdom.Element () -> Vdom.Element ()
+memoOf content =
+    Jorn.Element.memo [ Jorn.Patch.encodeHtml content ] (\() -> content)
 
 
 {-| Raw HTML, with and without elements inside, so the test also checks that
@@ -450,6 +473,16 @@ labelHelp html next =
         Raw ns tag attrs content ->
             ( Raw ns tag (List.map (relabel (String.fromInt next)) attrs) content, next + 1 )
 
+        Memo key view ->
+            -- What a memo builds stands for one node, like a whole view, and
+            -- its handlers' numbers depend on where it is, so that goes into
+            -- its dependencies too.
+            let
+                ( content, after ) =
+                    labelHelp (Vdom.root (view ())) next
+            in
+            ( Memo (key ++ "@" ++ String.fromInt next) (\() -> content), after )
+
 
 {-| A fragment isn't an element, so its children carry on the numbering of
 their parent's, which is the order they appear in on screen.
@@ -504,6 +537,22 @@ survivors old new =
 survivorsHelp : List Int -> List Int -> Vdom.Element msg -> Vdom.Element msg -> List ( List Int, List Int ) -> List ( List Int, List Int )
 survivorsHelp oldPath newPath old new acc =
     case ( old, new ) of
+        ( Memo oldKey view, Memo newKey _ ) ->
+            -- The diff skips memos with the same dependencies, so everything
+            -- in one stays where it was, even keyed children whose keys
+            -- changed, since keys aren't part of what the page shows.
+            if oldKey == newKey then
+                survivorsHelp oldPath newPath (Vdom.root (view ())) (Vdom.root (view ())) acc
+
+            else
+                survivorsHelp oldPath newPath (Vdom.root (view ())) new acc
+
+        ( Memo _ view, _ ) ->
+            survivorsHelp oldPath newPath (Vdom.root (view ())) new acc
+
+        ( _, Memo _ view ) ->
+            survivorsHelp oldPath newPath old (Vdom.root (view ())) acc
+
         ( Text _, Text _ ) ->
             ( List.reverse oldPath, List.reverse newPath ) :: acc
 

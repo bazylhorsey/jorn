@@ -93,27 +93,31 @@ handle incoming attributes =
                 |> Result.mapError (DecodeFailed incoming.name)
 
 
+{-| The node at a path. A memo isn't a node of its own: the path goes on
+through what it builds, which is already built when the runtime keeps it.
+-}
 find : List Int -> Element msg -> Maybe (Element msg)
 find path element =
-    case path of
-        [] ->
+    case ( path, element ) of
+        ( _, Vdom.Memo _ view ) ->
+            find path (Vdom.root (view ()))
+
+        ( [], _ ) ->
             Just element
 
-        index :: rest ->
-            case element of
-                Vdom.Element _ _ _ _ children ->
-                    if index < 0 then
-                        Nothing
+        ( index :: rest, Vdom.Element _ _ _ _ children ) ->
+            if index < 0 then
+                Nothing
 
-                    else
-                        Vdom.flatten children
-                            |> List.drop index
-                            |> List.head
-                            |> Maybe.map Vdom.unkey
-                            |> Maybe.andThen (find rest)
+            else
+                Vdom.flatten children
+                    |> List.drop index
+                    |> List.head
+                    |> Maybe.map Vdom.unkey
+                    |> Maybe.andThen (find rest)
 
-                _ ->
-                    Nothing
+        _ ->
+            Nothing
 
 
 {-| A readable description, for logs.

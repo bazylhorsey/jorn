@@ -10,13 +10,13 @@ Statuses: **done** is available today. **partial** is available with a stated di
 |---|---|---|
 | Elements with any tag (`element`) and namespaced elements (`namespaced`) | done | SVG and MathML work today through `namespaced`. |
 | Text nodes | done | |
-| `Element.map` | partial | Eager: walks the subtree. A lazy map needs kernel code, which a pure package can't use. |
+| `Element.map` | partial | Eager: walks the subtree, but not into memos, which map what they build when they build it. A fully lazy map needs kernel code, which a pure package can't use. |
 | HTML element helpers | done | All standard elements in `Jorn.Element.Html`. Void elements (`br`, `img`, `input`, ...) take only attributes. |
 | SVG element helpers | done | `Jorn.Element.Svg`. Attributes go through `Attribute.attribute`. |
 | MathML element helpers | done | `Jorn.Element.MathMl`, the elements of MathML Core. Attributes go through `Attribute.attribute`. |
 | `none`, `fragment` and `advanced` | done | Fragments are spliced into their parent before diffing, so they never appear on the wire. |
 | Keyed children | done | `Jorn.Element.Keyed`. Moves DOM nodes instead of rewriting them, with the fewest moves the order allows. |
-| Memoized subtrees | todo | |
+| Memoized subtrees | done | `Element.memo`, with JSON values as dependencies, compared by their encoding. While they're the same, the subtree isn't built or diffed, and events inside it don't build it either. |
 | Raw HTML | done | `Element.unsafeRawHtml`, for content like rendered Markdown. The HTML isn't escaped, and its content is replaced as a whole when it changes. |
 | Render to an HTML string | done | `Element.toString`, `toDocumentString` and `toReadableString`. Matches what the browser's `innerHTML` gives for the mounted view, checked against jsdom on random views. The base for server-side rendering. |
 
@@ -90,4 +90,4 @@ The full feature set comes first. These build on it, and start once 1.0 is out.
 
 ## Performance
 
-The goal is for Jorn to be as fast as Elm allows. The diff already skips attribute work entirely for elements with no attributes, which is most of them, and keyed children turn reorders into a handful of moves. Memoized subtrees are the next big win.
+The goal is for Jorn to be as fast as Elm allows. The diff already skips attribute work entirely for elements with no attributes, which is most of them, and keyed children turn reorders into a handful of moves. `Element.memo` skips the parts of a view whose dependencies didn't change, so in a long list where one item changes, only that item is built and diffed.

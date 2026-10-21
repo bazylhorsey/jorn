@@ -177,6 +177,20 @@ suite =
                     |> Jorn.Patch.encodeHtml
                     |> Encode.encode 0
                     |> Expect.equal """{"tag":"input","namespace":"","attrs":{},"props":{},"events":{"keydown":{"preventDefault":true,"stopPropagation":false,"include":["key"],"advanced":true}},"children":[]}"""
+        , test "routes through a memo to what it built" <|
+            \_ ->
+                Event.route (incoming [ 1, 0 ] "click" noPayload)
+                    (Html.div []
+                        [ Element.text "a"
+                        , Element.memo [] (\() -> Html.p [] [ Html.button [ Events.onClick Clicked ] [] ])
+                        ]
+                    )
+                    |> Expect.equal (Ok Clicked)
+        , test "routes to a memo at the root" <|
+            \_ ->
+                Event.route (incoming [] "click" noPayload)
+                    (Element.memo [] (\() -> Element.map Wrapped (Html.button [ Events.onClick Clicked ] [])))
+                    |> Expect.equal (Ok (Wrapped Clicked))
         , test "errors render readably" <|
             \_ ->
                 Event.errorToString (NoHandler [ 1, 1 ] "input")

@@ -62,6 +62,8 @@ import Jorn.Effect exposing (Effect)
 import Jorn.Element exposing (Element)
 import Jorn.Internal.Effect as Effect exposing (Item(..))
 import Jorn.Internal.Event as Routing
+import Jorn.Internal.Patch
+import Jorn.Internal.Vdom as Vdom
 import Jorn.Patch
 import Json.Decode as Decode
 import Json.Encode as Encode exposing (Value)
@@ -175,8 +177,13 @@ start config flags =
         ( model, effect ) =
             config.init flags
 
-        screen =
+        view =
             config.view model
+
+        -- Memos keep what they build, so events and the next diff don't
+        -- build them again.
+        screen =
+            Maybe.withDefault view (Vdom.build view)
 
         initial =
             State
@@ -379,11 +386,8 @@ render config (State s) =
                 ( State { s | beforePaint = [], frameRequested = True }, Cmd.none )
                 s.beforePaint
 
-        next =
-            config.view ready.model
-
-        patches =
-            Jorn.Patch.diff ready.screen next
+        ( patches, next ) =
+            Jorn.Internal.Patch.diffKeeping ready.screen (config.view ready.model)
 
         instructions =
             List.reverse ready.instructions

@@ -35,6 +35,11 @@ jobs:
       - name: App runtime
         run: node runtime.mjs
         working-directory: client/test
+      - run: $GITHUB_WORKSPACE/node_modules/.bin/elm make src/MemoSpec.elm --output=build/memo.js
+        working-directory: client/test/elm
+      - name: Memoized subtrees
+        run: node memo.mjs
+        working-directory: client/test
       - run: $GITHUB_WORKSPACE/node_modules/.bin/elm make src/Main.elm --output=build/main.js
         working-directory: examples/todos
       - name: Todos example

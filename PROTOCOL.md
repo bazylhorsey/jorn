@@ -6,11 +6,13 @@ Everything on the wire is JSON. The format is pinned by the golden tests in `tes
 
 A path is a list of child indices from the root. The root is `[]`. `[1, 0]` is the first child of the root's second child. Text nodes count as children.
 
-## Fragments
+## Fragments and memos
 
-Fragments and keys never appear on the wire. Before diffing or encoding, a fragment's children are spliced into its parent's child list, at any depth, and `none` (the empty fragment) disappears. Paths count the spliced children.
+Fragments, keys and memos never appear on the wire. Before diffing or encoding, a fragment's children are spliced into its parent's child list, at any depth, and `none` (the empty fragment) disappears. Paths count the spliced children.
 
 A view's root is always a single node. A fragment at the root becomes an empty text node if it has no children, its child if it has one, and otherwise a `jorn-fragment` element with `style="display: contents"` holding the children.
+
+A memo (`Element.memo`) is encoded as the node it builds, which is always a single node, rooted like a whole view. A memo whose dependencies didn't change gives no patches.
 
 ## Nodes
 
@@ -160,7 +162,7 @@ The server closes the socket with 1002 if the first message isn't a `join` for a
 
 Within one element, the last attribute, property, or handler with a given name wins, except `class` and `style`, which accumulate: classes joined with spaces like `elm/html`, and style declarations joined with semicolons. The client only ever sees the joined attribute.
 
-Changing only a handler's message (same event name and options) produces no patch. Decoders stay in Elm and routing always uses the current tree.
+Changing only a handler's message (same event name and options) produces no patch. Decoders stay in Elm and routing always uses the current tree. A memo whose dependencies didn't change is kept as it was built, handlers included, so events inside it are routed through those.
 
-`Element.map` is eager: it walks the subtree and wraps every decoder. `elm/html` makes it lazy with kernel code, which a pure package can't do.
+`Element.map` is eager: it walks the subtree and wraps every decoder. `elm/html` makes it lazy with kernel code, which a pure package can't do. It doesn't walk into a memo, which maps what it builds when it builds it.
 
