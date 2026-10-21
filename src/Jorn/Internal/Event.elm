@@ -1,6 +1,6 @@
 module Jorn.Internal.Event exposing
     ( Incoming, decoder
-    , route, Error(..), errorToString
+    , route, decide, Error(..), errorToString
     )
 
 {-| Route an event reported by the client back to the handler that produced it.
@@ -16,7 +16,7 @@ public face of it.
 
 # Routing
 
-@docs route, Error, errorToString
+@docs route, decide, Error, errorToString
 
 -}
 
@@ -58,6 +58,16 @@ type Error
 -}
 route : Incoming -> Element msg -> Result Error msg
 route incoming element =
+    decide incoming element
+        |> Result.map .message
+
+
+{-| Like `route`, with the rest of the handler's answer: whether it asks to
+prevent the event's default and stop its propagation. Only handlers made with
+`Event.advanced` ever ask.
+-}
+decide : Incoming -> Element msg -> Result Error (Vdom.Handler msg)
+decide incoming element =
     case find incoming.path (Vdom.root element) of
         Nothing ->
             Err (NodeNotFound incoming.path)
@@ -72,7 +82,7 @@ route incoming element =
             Err (NoHandler incoming.path incoming.name)
 
 
-handle : Incoming -> List (Vdom.Attribute msg) -> Result Error msg
+handle : Incoming -> List (Vdom.Attribute msg) -> Result Error (Vdom.Handler msg)
 handle incoming attributes =
     case Dict.get incoming.name (Vdom.facts attributes).events of
         Nothing ->

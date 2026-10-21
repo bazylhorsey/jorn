@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- `Event.advanced` makes a handler whose decoder decides, for each event, whether to call `preventDefault` and `stopPropagation`, for cases like preventing the default only when Enter is pressed (#8). It decodes a `Handler`, the message with the two decisions, the way elm/html's `custom` does. The decisions add to the handler's options, which still apply. It's for client mode: the page asks the program as the event fires, and the program answers before the listener returns. In server mode the answer would come too late, so the page doesn't ask, only the options apply, and the message still arrives. On the wire an advanced handler's options have `"advanced": true`, left out otherwise, so every other handler encodes as before.
+
 ## v0.2.1 (2026-10-19)
 
 View additions: MathML elements, raw HTML, rendering a view to an HTML string, and form submits with their fields.

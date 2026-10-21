@@ -538,6 +538,54 @@ async function asyncUnit(name, body) {
   }
 }
 
+unit("an advanced handler's answer applies on top of its options", () => {
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+  const sent = [];
+  const asked = [];
+  const jorn = connect(container, {
+    send: (e) => sent.push(e),
+    decide: (e) => {
+      asked.push(e);
+      if (e.event.key === "x") return null;
+      return { preventDefault: e.event.key === "Enter", stopPropagation: e.event.key === "Escape" };
+    },
+  });
+  jorn.mount(
+    el("form", { events: { keydown: opts({ include: ["key"] }) } }, [
+      el("input", { events: { keydown: opts({ include: ["key"], advanced: true }) } }),
+      el("textarea", { events: { keydown: opts({ include: ["key"], advanced: true, preventDefault: true }) } }),
+      el("select", { events: { keydown: opts({ include: ["key"] }) } }),
+    ]),
+  );
+  const [input, textarea, select] = container.firstChild.childNodes;
+  const press = (target, key) => {
+    const event = new window.KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+    target.dispatchEvent(event);
+    return event;
+  };
+  check(press(input, "Enter").defaultPrevented, "the answer prevents Enter");
+  check(JSON.stringify(asked[0]) === '{"path":[0],"name":"keydown","event":{"key":"Enter"}}', "asked with what it would send", { asked });
+  check(!press(input, "a").defaultPrevented, "and nothing else");
+  sent.length = 0;
+  press(input, "Escape");
+  check(sent.length === 1 && JSON.stringify(sent[0].path) === "[0]", "the answer stops Escape before the form sees it", { sent });
+  check(!press(input, "x").defaultPrevented, "no answer prevents nothing");
+  check(press(textarea, "a").defaultPrevented, "options still apply whatever the answer");
+  const asks = asked.length;
+  press(select, "Enter");
+  check(asked.length === asks, "handlers that aren't advanced never ask", { asked: asked.length });
+});
+
+unit("without a way to ask, as in server mode, an advanced handler gets its options", () => {
+  const { container, sent, jorn } = setup();
+  jorn.mount(el("input", { events: { keydown: opts({ include: ["key"], advanced: true }) } }));
+  const event = new window.KeyboardEvent("keydown", { key: "Enter", cancelable: true });
+  container.firstChild.dispatchEvent(event);
+  check(!event.defaultPrevented, "not prevented");
+  check(sent.length === 1 && sent[0].event.key === "Enter", "and the event still goes", { sent });
+});
+
 function typeInto(input, value) {
   input.value = value;
   const event = new window.Event("input", { bubbles: true, cancelable: true });

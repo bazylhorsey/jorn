@@ -49,10 +49,22 @@ const recorded = [];
 const opened = [];
 document.body.addEventListener("opened", (event) => opened.push(event.detail));
 
-const app = start(program, container, { flags: 5, effects: { record: (payload) => recorded.push(payload) } });
-await tick();
 const $ = (id) => document.getElementById(id);
 const click = (id) => $(id).dispatchEvent(new window.Event("click"));
+const press = (key) => {
+  const event = new window.KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+  $("keys").dispatchEvent(event);
+  return event;
+};
+// A client effect runs while the program is handing over its commands. A key
+// pressed then still gets its answer in time.
+const pressedDuringEffect = [];
+const record = (payload) => {
+  recorded.push(payload);
+  pressedDuringEffect.push(press("Enter").defaultPrevented);
+};
+const app = start(program, container, { flags: 5, effects: { record } });
+await tick();
 
 check($("increment")?.textContent === "5", "mounts the initial view with flags", { html: container.innerHTML });
 
@@ -87,6 +99,18 @@ $("field").value = "Jorn";
 $("field").dispatchEvent(new window.Event("input"));
 await flushFrames();
 check($("name").textContent === "Jorn", "input routes to its handler", { got: $("name").textContent });
+
+// An advanced handler decides preventDefault and stopPropagation per event,
+// before its listener returns.
+check(JSON.stringify(pressedDuringEffect) === "[true]", "answered during a client effect", { pressedDuringEffect });
+check(press("Enter").defaultPrevented, "the program prevents Enter as it fires");
+check(!press("a").defaultPrevented, "and lets other keys through");
+press("Escape");
+await flushFrames();
+check($("pressed").textContent === "Enter,bubbled Enter,Enter,bubbled Enter,a,bubbled a,Escape", "every key arrives, and Escape stops at the input", {
+  got: $("pressed").textContent,
+});
+check(!sent.some((message) => message.error), "no errors", { sent });
 
 // Shutdown.
 app.shutdown();

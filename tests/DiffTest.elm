@@ -219,15 +219,15 @@ unit =
                     (Html.form [ Events.on "submit" (Decode.succeed ()) ] [])
                     (Html.form [ Events.preventDefault (Events.onSubmit ()) ] [])
                     |> expectPatches
-                        [ SetEvent [] "submit" { preventDefault = True, stopPropagation = False, include = [], debounce = 0, throttle = 0 } ]
+                        [ SetEvent [] "submit" { preventDefault = True, stopPropagation = False, include = [], debounce = 0, throttle = 0, advanced = False } ]
         , test "an option reaches only the handler it wraps" <|
             \_ ->
                 Jorn.Patch.diff
                     (Html.div [] [])
                     (Html.div [ Events.preventDefault (Events.onClick ()), Events.onInput (\_ -> ()) ] [])
                     |> expectPatches
-                        [ SetEvent [] "click" { preventDefault = True, stopPropagation = False, include = [], debounce = 0, throttle = 0 }
-                        , SetEvent [] "input" { preventDefault = False, stopPropagation = False, include = [ "target.value" ], debounce = 0, throttle = 0 }
+                        [ SetEvent [] "click" { preventDefault = True, stopPropagation = False, include = [], debounce = 0, throttle = 0, advanced = False }
+                        , SetEvent [] "input" { preventDefault = False, stopPropagation = False, include = [ "target.value" ], debounce = 0, throttle = 0, advanced = False }
                         ]
         , test "options on one handler merge rather than replace each other" <|
             \_ ->
@@ -235,21 +235,28 @@ unit =
                     (Html.div [] [])
                     (Html.div [ Events.include [ "target.value" ] (Events.stopPropagation (Events.onClick ())) ] [])
                     |> expectPatches
-                        [ SetEvent [] "click" { preventDefault = False, stopPropagation = True, include = [ "target.value" ], debounce = 0, throttle = 0 } ]
+                        [ SetEvent [] "click" { preventDefault = False, stopPropagation = True, include = [ "target.value" ], debounce = 0, throttle = 0, advanced = False } ]
         , test "debounce and throttle merge to the longest asked for" <|
             \_ ->
                 Jorn.Patch.diff
                     (Html.div [] [])
                     (Html.div [ Events.debounce 100 (Events.throttle 500 (Events.debounce 300 (Events.preventDefault (Events.onClick ())))) ] [])
                     |> expectPatches
-                        [ SetEvent [] "click" { preventDefault = True, stopPropagation = False, include = [], debounce = 300, throttle = 500 } ]
+                        [ SetEvent [] "click" { preventDefault = True, stopPropagation = False, include = [], debounce = 300, throttle = 500, advanced = False } ]
         , test "a changed debounce is re-sent" <|
             \_ ->
                 Jorn.Patch.diff
                     (Html.input [ Events.debounce 100 (Events.onInput identity) ])
                     (Html.input [ Events.debounce 200 (Events.onInput identity) ])
                     |> expectPatches
-                        [ SetEvent [] "input" { preventDefault = False, stopPropagation = False, include = [ "target.value" ], debounce = 200, throttle = 0 } ]
+                        [ SetEvent [] "input" { preventDefault = False, stopPropagation = False, include = [ "target.value" ], debounce = 200, throttle = 0, advanced = False } ]
+        , test "making a handler advanced re-sends its options" <|
+            \_ ->
+                Jorn.Patch.diff
+                    (Html.input [ Events.onKeydown identity ])
+                    (Html.input [ Events.include [ "key" ] (Events.advanced "keydown" (Decode.map (\k -> { message = k, preventDefault = k == "Enter", stopPropagation = False }) Events.key)) ])
+                    |> expectPatches
+                        [ SetEvent [] "keydown" { preventDefault = False, stopPropagation = False, include = [ "key" ], debounce = 0, throttle = 0, advanced = True } ]
         , test "an option around something that is not a handler is ignored" <|
             \_ ->
                 Jorn.Patch.diff
@@ -504,6 +511,15 @@ wire =
                             ++ """{"op":"append","path":[],"nodes":[{"tag":"span","namespace":"","attrs":{"class":"x"},"props":{},"events":{},"children":[]}]}"""
                             ++ "]"
                         )
+        , test "golden advanced handler encoding" <|
+            \_ ->
+                Jorn.Patch.diff
+                    (Html.input [])
+                    (Html.input [ Events.advanced "keydown" (Decode.succeed { message = (), preventDefault = True, stopPropagation = False }) ])
+                    |> Jorn.Patch.encode
+                    |> Encode.encode 0
+                    |> Expect.equal
+                        """[{"op":"set-event","path":[],"name":"keydown","options":{"preventDefault":false,"stopPropagation":false,"include":[],"advanced":true}}]"""
         , test "golden fragment encoding: fragments never reach the wire" <|
             \_ ->
                 Jorn.Patch.diff

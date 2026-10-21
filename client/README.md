@@ -88,7 +88,7 @@ jorn.patch(patches); // after every update, with the output of Jorn.Patch.encode
 | `start(program, container, { flags, effects, ports })` | Run a compiled Jorn program in `container`. Returns `{ shutdown() }`. |
 | `stream(container, url, { flags, csrfToken, effects, heartbeat })` | Show a program running on a server in `container`, over a websocket. Returns `{ close() }`. |
 | `defineServerComponent({ effects })` | Define `<jorn-server-component>`. Only the first call counts. |
-| `connect(container, { send, raw, effects })` | Take over `container`. Its only child is the root of your view from here on. `effects` maps names to the functions `Effect.client` can call. |
+| `connect(container, { send, decide, raw, effects })` | Take over `container`. Its only child is the root of your view from here on. `effects` maps names to the functions `Effect.client` can call. `decide`, for a program in the same page, answers handlers made with `Event.advanced` with `{ preventDefault, stopPropagation }`, before it returns. |
 | `.mount(node)` | Render a whole tree, replacing whatever was there. |
 | `.patch(patches)` | Apply patches strictly in order. Throws on a patch that doesn't fit the page, which means the page and the server have drifted apart. |
 | `.run(instructions)` | Run patcher instructions from `Jorn.Effect` (focus, scroll, custom events, named effects), in order. Call it after the patches they came with. |
@@ -97,7 +97,7 @@ jorn.patch(patches); // after every update, with the output of Jorn.Patch.encode
 
 ## Behavior worth knowing
 
-- `preventDefault` and `stopPropagation` are applied synchronously when the event fires, from the options Elm sent ahead of time.
+- `preventDefault` and `stopPropagation` are applied synchronously when the event fires, from the options Elm sent ahead of time. A handler made with `Event.advanced` can add to them per event, but only in client mode, where `start` asks the program as the event fires. In server mode the answer would come too late, so only the options apply.
 - `debounce` and `throttle` hold events back in the page, so dropped ones are never sent. An event that isn't held goes after the held ones that fired before it.
 - Paths are worked out when an event fires, so they're correct for whatever is on screen.
 - Events the browser fires because of a patch, like the `blur` Chrome sends when a patch removes the focused element, aren't reported. They aren't the user's doing.

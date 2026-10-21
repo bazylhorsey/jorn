@@ -33,7 +33,7 @@ An element made with `Element.unsafeRawHtml` has `html` in place of `children`:
 
 The client sets `html` as the element's `innerHTML`, without checking it. Its content is opaque: no path ever leads inside it, and patches that would change its children are protocol errors. Listeners are only installed on nodes from the wire, so events from inside the content reach Elm only through handlers on the raw element or its ancestors, with their paths.
 
-`namespace` is `""` for HTML. `attrs` are strings set with `setAttribute`. `props` are JSON values assigned to the DOM object; the client ignores the names `__proto__`, `constructor` and `prototype`, so a property can't change what kind of object an element is. `events` tell the client which listeners to install and how; the handlers themselves never leave Elm. An event's options can also have `debounce` and `throttle`, in milliseconds, which are left out when they're not used (below).
+`namespace` is `""` for HTML. `attrs` are strings set with `setAttribute`. `props` are JSON values assigned to the DOM object; the client ignores the names `__proto__`, `constructor` and `prototype`, so a property can't change what kind of object an element is. `events` tell the client which listeners to install and how; the handlers themselves never leave Elm. An event's options can also have `debounce` and `throttle`, in milliseconds, and `"advanced": true`, all of which are left out when they're not used (below).
 
 ## Patches
 
@@ -92,6 +92,8 @@ The client applies `preventDefault` and `stopPropagation` synchronously from the
 { "path": [], "name": "submit", "event": { "formFields": [["email", "a@b.c"], ["plan", "pro"]] } }
 ```
 
+**Deciding per event.** A handler made with `Event.advanced` has `"advanced": true` in its options: its decoder decides, for each event, whether to call `preventDefault` and `stopPropagation`, on top of what the options say. The browser needs to know before the listener returns, so the client can only ask when the program runs in the same page. In client mode it asks right after the static options, before the event is sent or held (see the client mode runtime, below), and applies a yes at once. If the handler's decoder fails, the answer is no. In server mode the answer would arrive after the browser has acted on the event, so the client doesn't ask: only the static options apply, and the event is sent as usual. A server never sees the question.
+
 **Debounce and throttle.** They run in the client, after `preventDefault` and `stopPropagation`, which still apply to every event. With `debounce`, the client holds the latest event back until none has fired for that long, then sends it. With `throttle`, it sends the first event straight away and holds the latest of the rest until the interval ends, which starts the next interval. With both, `throttle` caps how long `debounce` holds an event. A held event's fields are copied when it fires and its path is worked out when it's sent, and it's dropped if its element or handler is gone by then. Any event the client sends goes after the held events that fired before it, so a submit never overtakes debounced typing.
 
 ## Client mode runtime
@@ -113,12 +115,15 @@ Page to program, on `fromJorn`:
 | Message | Program behavior |
 |---|---|
 | `{ "event": { "path", "name", "event" } }` | Route the event to its handler and run `update` |
+| `{ "decide": { "path", "name", "event" }, "reply": object }` | Run the handler's decoder, but not `update`, and answer through `reply` before `send` returns (below) |
 | `{ "frame": true }` | Run `beforePaint` messages, diff once, and send the patches and instructions |
 | `{ "painted": true }` | Run `afterPaint` messages |
 | `{ "remount": true }` | Send the whole view again, as `mount` |
 | `{ "shutdown": true }` | Stop, and ignore everything after |
 
 The program asks for a frame only when something changed, and every message that arrives before the frame is handled before its one diff, so a burst of events costs one render.
+
+**Answering `decide`.** The answer to an advanced handler's question can't go back as a message on `toJorn`: after each batch of commands, Elm's ports wait for the event loop to come round before handing over the next, and the browser's listener can't wait. A port's `send` runs `update` before it returns, though, so the program answers by reading `reply`, an object the page makes with a getter for each field: reading `reply.preventDefault` means prevent the default, and reading `reply.stopPropagation` means stop propagation. It reads neither for no. The event itself follows as an ordinary `event`, right away or once debounce and throttle let it go.
 
 ## Server mode
 

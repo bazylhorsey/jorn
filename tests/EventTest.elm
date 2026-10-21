@@ -17,6 +17,7 @@ type Msg
     | Typed String
     | Child Int
     | Submitted (List ( String, String ))
+    | Wrapped Msg
 
 
 view : Element Msg
@@ -149,8 +150,51 @@ suite =
                     |> Jorn.Patch.encodeHtml
                     |> Encode.encode 0
                     |> Expect.equal """{"tag":"form","namespace":"","attrs":{},"props":{},"events":{"submit":{"preventDefault":true,"stopPropagation":false,"include":["formFields"]}},"children":[]}"""
+        , test "an advanced handler answers with its message and what to prevent" <|
+            \_ ->
+                [ "Enter", "a", "Escape" ]
+                    |> List.map (\k -> Event.decide (incoming [] "keydown" (Encode.object [ ( "key", Encode.string k ) ])) enterOrEscape)
+                    |> Expect.equal
+                        [ Ok { message = Typed "Enter", preventDefault = True, stopPropagation = False }
+                        , Ok { message = Typed "a", preventDefault = False, stopPropagation = False }
+                        , Ok { message = Typed "Escape", preventDefault = False, stopPropagation = True }
+                        ]
+        , test "an advanced handler routes like any other" <|
+            \_ ->
+                Event.route (incoming [] "keydown" (Encode.object [ ( "key", Encode.string "Enter" ) ])) enterOrEscape
+                    |> Expect.equal (Ok (Typed "Enter"))
+        , test "other handlers never ask to prevent anything" <|
+            \_ ->
+                Event.decide (incoming [] "submit" noPayload) (Html.form [ Events.onSubmit Clicked ] [])
+                    |> Expect.equal (Ok { message = Clicked, preventDefault = False, stopPropagation = False })
+        , test "map keeps an advanced handler's answer" <|
+            \_ ->
+                Event.decide (incoming [] "keydown" (Encode.object [ ( "key", Encode.string "Enter" ) ])) (Element.map Wrapped enterOrEscape)
+                    |> Expect.equal (Ok { message = Wrapped (Typed "Enter"), preventDefault = True, stopPropagation = False })
+        , test "an advanced handler tells the page to ask, and options still apply" <|
+            \_ ->
+                Html.input [ Events.include [ "key" ] (Events.preventDefault (Events.advanced "keydown" (Decode.map (\k -> { message = Typed k, preventDefault = False, stopPropagation = False }) Events.key))) ]
+                    |> Jorn.Patch.encodeHtml
+                    |> Encode.encode 0
+                    |> Expect.equal """{"tag":"input","namespace":"","attrs":{},"props":{},"events":{"keydown":{"preventDefault":true,"stopPropagation":false,"include":["key"],"advanced":true}},"children":[]}"""
         , test "errors render readably" <|
             \_ ->
                 Event.errorToString (NoHandler [ 1, 1 ] "input")
                     |> Expect.equal "No \"input\" handler at path [1,1]"
+        ]
+
+
+enterOrEscape : Element Msg
+enterOrEscape =
+    Html.input
+        [ Events.advanced "keydown"
+            (Decode.map
+                (\k ->
+                    { message = Typed k
+                    , preventDefault = k == "Enter"
+                    , stopPropagation = k == "Escape"
+                    }
+                )
+                Events.key
+            )
         ]

@@ -37,9 +37,15 @@ const XHTML = "http://www.w3.org/1999/xhtml";
  * @param {Element} container
  * `effects` holds the functions Elm can call by name with `Effect.client`.
  *
- * @param {{ send: (event: { path: number[], name: string, event: unknown }) => void, raw?: boolean, effects?: Record<string, (payload: unknown, context: { container: Element }) => void> }} options
+ * `decide` is for hosts whose program runs in the same page. A handler made
+ * with `Event.advanced` decides `preventDefault` and `stopPropagation` for
+ * each event, so the patcher calls `decide` with the event before sending
+ * it, and applies what comes back, which has to come back right away. Without
+ * `decide`, as in server mode, only the handler's options apply.
+ *
+ * @param {{ send: (event: { path: number[], name: string, event: unknown }) => void, decide?: (event: { path: number[], name: string, event: unknown }) => { preventDefault?: boolean, stopPropagation?: boolean } | null | undefined, raw?: boolean, effects?: Record<string, (payload: unknown, context: { container: Element }) => void> }} options
  */
-export function connect(container, { send, raw = false, effects = {} } = {}) {
+export function connect(container, { send, decide, raw = false, effects = {} } = {}) {
   if (!container || container.nodeType !== 1) {
     throw new TypeError("Jorn: connect needs a container element");
   }
@@ -190,6 +196,13 @@ export function connect(container, { send, raw = false, effects = {} } = {}) {
       const fields = formFields(event);
       if (raw) event.formFields = fields;
       else payload.formFields = fields;
+    }
+    // An advanced handler decides for itself, on top of its options. Its
+    // program is in this page, so it can answer before we return.
+    if (options.advanced && decide) {
+      const answer = decide({ path, name: event.type, event: payload });
+      if (answer?.preventDefault === true) event.preventDefault();
+      if (answer?.stopPropagation === true) event.stopPropagation();
     }
     if (options.debounce > 0 || options.throttle > 0) {
       limited(el, event.type, options, payload);
@@ -524,7 +537,26 @@ export function start(program, container, { flags, effects = {}, ports = {} } = 
     throw new TypeError(`Jorn: start needs a program with ports called ${toJorn} and ${fromJorn}`);
   }
 
-  const jorn = connect(container, { send: (event) => into.send({ event }), raw: true, effects });
+  // An advanced handler's answer has to be back before its listener
+  // returns. A command from the program can't promise that: after each batch
+  // of commands, a port waits for the event loop before handing over the
+  // next. But `send` runs the program's update before it returns, so the
+  // program answers by reading the fields of `reply` that mean yes.
+  function decide(event) {
+    const answer = { preventDefault: false, stopPropagation: false };
+    const reply = {
+      get preventDefault() {
+        return (answer.preventDefault = true);
+      },
+      get stopPropagation() {
+        return (answer.stopPropagation = true);
+      },
+    };
+    into.send({ decide: event, reply });
+    return answer;
+  }
+
+  const jorn = connect(container, { send: (event) => into.send({ event }), decide, raw: true, effects });
   const view = container.ownerDocument.defaultView;
   // One render per animation frame, however many messages arrive before it.
   const nextFrame =

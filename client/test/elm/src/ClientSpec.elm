@@ -336,19 +336,26 @@ attribute =
         , Random.map Attr.checked (Random.uniform True [ False ])
         , Random.map Attr.disabled (Random.uniform True [ False ])
         , Random.map (\n -> Attr.property "config" (Encode.list Encode.int (List.range 0 n))) (Random.int 0 2)
-        , Random.map2
-            (\name prevent ->
-                Events.custom name
-                    (if prevent then
-                        Events.preventDefault
+        , Random.map3
+            (\name prevent advanced ->
+                (if prevent then
+                    Events.preventDefault
+
+                 else
+                    identity
+                )
+                    (if advanced then
+                        -- No page asks it here, as in server mode, so only
+                        -- its options apply, whatever it answers.
+                        Events.advanced name (Decode.succeed { message = (), preventDefault = True, stopPropagation = True })
 
                      else
-                        identity
+                        Events.on name (Decode.succeed ())
                     )
-                    (Decode.succeed ())
             )
             (Random.uniform "click" [ "input", "mouseover" ])
             (Random.uniform True [ False ])
+            (Random.uniform False [ True ])
         ]
         |> Random.andThen identity
 
@@ -471,7 +478,7 @@ relabel id attr =
             Vdom.Prop n v
 
         Vdom.On n _ ->
-            Vdom.On n (Decode.succeed id)
+            Vdom.On n (Decode.succeed (Vdom.handler id))
 
         Vdom.Options options wrapped ->
             Vdom.Options options (relabel id wrapped)
