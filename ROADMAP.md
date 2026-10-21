@@ -39,7 +39,7 @@ Statuses: **done** is available today. **partial** is available with a stated di
 | `on` and `custom` | done | Options are static, so the client can decide `preventDefault` instantly without a round trip. |
 | `onClick`, `onInput`, `onCheck`, `onSubmit` | done | |
 | Submitting a form with its fields | done | `Event.onSubmitFields`, and `Event.formFields` for other handlers. The page collects the fields, so it works the same in server mode. File inputs are left out. |
-| `preventDefault` and `stopPropagation` | done | Static, through `custom`. Deciding per event is todo. |
+| `preventDefault` and `stopPropagation` | done | Static, through `custom`, or decided per event with `advanced` in client mode. In server mode the answer would arrive too late, so only the static options apply. |
 | Mouse, keyboard, focus, blur, and change helpers | done | Keyboard helpers include `key`, so server components get it. |
 | Debounce and throttle | done | `Event.debounce` and `Event.throttle`. They run in the page, so dropped events never reach a server. |
 | Emitting custom events from a component | todo | |

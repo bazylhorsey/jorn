@@ -4,12 +4,14 @@ module Jorn.Internal.Vdom exposing
     , Element(..)
     , EventOptions
     , Facts
+    , Handler
     , Node(..)
     , defaultOptions
     , encodeNode
     , encodeOptions
     , facts
     , flatten
+    , handler
     , keys
     , map
     , mapAttribute
@@ -55,9 +57,28 @@ type Closing
 type Attribute msg
     = Attr String String
     | Prop String Value
-    | On String (Decoder msg)
+    | On String (Decoder (Handler msg))
     | Options EventOptions (Attribute msg)
     | NoAttribute
+
+
+{-| What a handler makes of one event: its message, and whether to call
+`preventDefault` and `stopPropagation` on top of what its options ask for.
+Only handlers made with `Event.advanced` decide those per event; every other
+handler leaves them `False`.
+-}
+type alias Handler msg =
+    { message : msg
+    , preventDefault : Bool
+    , stopPropagation : Bool
+    }
+
+
+{-| A handler's answer that only carries a message.
+-}
+handler : msg -> Handler msg
+handler message =
+    { message = message, preventDefault = False, stopPropagation = False }
 
 
 {-| Event options are static on purpose. A server component has to tell the
@@ -65,12 +86,14 @@ client up front whether to call preventDefault, because the decision can't
 wait for a round trip. `include` lists the dotted event fields the client
 must serialize and send back (for example `target.value`). `debounce` and
 `throttle` are in milliseconds, 0 for none, and also run in the client, so
-dropped events never cross the wire.
+dropped events never cross the wire. `advanced` marks a handler that decides
+`preventDefault` and `stopPropagation` per event, which the client can only
+ask about when the program runs in the same page.
 
 Options wrap the handler they apply to, and options on the same handler merge:
-`preventDefault` and `stopPropagation` are true if any of them asked,
-`include` is the union of what they asked for, and `debounce` and `throttle`
-are the longest asked for. An option wrapped around
+`preventDefault`, `stopPropagation` and `advanced` are true if any of them
+asked, `include` is the union of what they asked for, and `debounce` and
+`throttle` are the longest asked for. An option wrapped around
 anything that isn't a handler is dropped, leaving the attribute as it was.
 
 -}
@@ -80,12 +103,13 @@ type alias EventOptions =
     , include : List String
     , debounce : Int
     , throttle : Int
+    , advanced : Bool
     }
 
 
 defaultOptions : EventOptions
 defaultOptions =
-    { preventDefault = False, stopPropagation = False, include = [], debounce = 0, throttle = 0 }
+    { preventDefault = False, stopPropagation = False, include = [], debounce = 0, throttle = 0, advanced = False }
 
 
 
@@ -99,7 +123,7 @@ elm/html, and style declarations joined by semicolons.
 type alias Facts msg =
     { attrs : Dict String String
     , props : Dict String Value
-    , events : Dict String ( EventOptions, Decoder msg )
+    , events : Dict String ( EventOptions, Decoder (Handler msg) )
     }
 
 
@@ -162,6 +186,7 @@ combineOptions added options =
     , include = addPaths added.include options.include
     , debounce = max added.debounce options.debounce
     , throttle = max added.throttle options.throttle
+    , advanced = added.advanced || options.advanced
     }
 
 
@@ -438,6 +463,7 @@ encodeOptions options =
          ]
             ++ milliseconds "debounce" options.debounce
             ++ milliseconds "throttle" options.throttle
+            ++ onlyIf options.advanced ( "advanced", Encode.bool True )
         )
 
 
@@ -445,8 +471,13 @@ encodeOptions options =
 -}
 milliseconds : String -> Int -> List ( String, Value )
 milliseconds name value =
-    if value > 0 then
-        [ ( name, Encode.int value ) ]
+    onlyIf (value > 0) ( name, Encode.int value )
+
+
+onlyIf : Bool -> ( String, Value ) -> List ( String, Value )
+onlyIf used field =
+    if used then
+        [ field ]
 
     else
         []
@@ -488,10 +519,18 @@ mapAttribute f attribute =
             Prop name value
 
         On name decoder ->
-            On name (Json.Decode.map f decoder)
+            On name (Json.Decode.map (mapHandler f) decoder)
 
         Options options wrapped ->
             Options options (mapAttribute f wrapped)
 
         NoAttribute ->
             NoAttribute
+
+
+mapHandler : (a -> b) -> Handler a -> Handler b
+mapHandler f answer =
+    { message = f answer.message
+    , preventDefault = answer.preventDefault
+    , stopPropagation = answer.stopPropagation
+    }

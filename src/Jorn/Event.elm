@@ -1,5 +1,6 @@
 module Jorn.Event exposing
     ( on, custom, Options
+    , advanced, Handler
     , onClick, onInput, onCheck, onSubmit, onSubmitFields
     , onMouseDown, onMouseUp, onMouseEnter, onMouseLeave, onMouseOver, onMouseOut
     , onKeydown, onKeyup, onKeypress
@@ -15,7 +16,8 @@ Options are static: the client must decide whether to call `preventDefault`
 the moment the event fires, without waiting on a server. `include` lists the
 event fields a server component needs serialized and sent back, as dotted
 paths like `"target.value"`. In client mode the whole event is available and
-`include` is ignored.
+`include` is ignored. To decide `preventDefault` and `stopPropagation` for
+each event instead, in client mode, see `advanced`.
 
 An option is an attribute of the handler it applies to:
 
@@ -30,6 +32,11 @@ option only reaches the handler it wraps.
 # Handlers
 
 @docs on, custom, Options
+
+
+# Deciding per event
+
+@docs advanced, Handler
 
 
 # Common events
@@ -96,14 +103,56 @@ type alias Options msg =
 -}
 on : String -> Decoder msg -> Attribute msg
 on name decoder =
-    Vdom.On name decoder
+    Vdom.On name (Decode.map Vdom.handler decoder)
 
 
 {-| Handle an event with explicit options.
 -}
 custom : String -> Options msg -> Decoder msg -> Attribute msg
 custom name options decoder =
-    options (Vdom.On name decoder)
+    options (on name decoder)
+
+
+{-| Handle an event whose decoder decides, for each event, whether to call
+`preventDefault` and `stopPropagation`. For example, keep Enter from
+submitting a form but let every other key type as usual:
+
+    Event.advanced "keydown"
+        (Decode.map
+            (\key ->
+                { message = KeyPressed key
+                , preventDefault = key == "Enter"
+                , stopPropagation = False
+                }
+            )
+            Event.key
+        )
+
+If the decoder fails, nothing is prevented or stopped. Options still apply
+on top, so `Event.preventDefault (Event.advanced ...)` prevents every event
+whatever the decoder says. With `debounce` or `throttle`, the decoder still
+decides for every event, including the ones that are held back or dropped.
+
+This needs the program in the same page as the event, so it's for client
+mode. In server mode the program's answer would arrive after the browser has
+already acted on the event, so the page doesn't ask: only the options apply,
+and the message still arrives. As with `on`, a server component only gets
+the event fields its handler asks for with `include`.
+
+-}
+advanced : String -> Decoder (Handler msg) -> Attribute msg
+advanced name decoder =
+    Vdom.Options { defaultOptions | advanced = True } (Vdom.On name decoder)
+
+
+{-| What a handler made with `advanced` makes of one event: the message, and
+whether to call `preventDefault` and `stopPropagation` on it.
+-}
+type alias Handler msg =
+    { message : msg
+    , preventDefault : Bool
+    , stopPropagation : Bool
+    }
 
 
 {-| -}

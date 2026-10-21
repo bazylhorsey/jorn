@@ -218,6 +218,21 @@ step config message ((State s) as state) =
                             Err problem ->
                                 ( state, send config "error" (Encode.string (Routing.errorToString problem)) )
 
+                    Ok (Decide event reply) ->
+                        case Routing.decide event s.screen of
+                            Ok handler ->
+                                -- Reading `reply` is the answer, so what
+                                -- decoding it returns doesn't matter.
+                                case Decode.decodeValue (answer handler) reply of
+                                    Ok () ->
+                                        ( state, Cmd.none )
+
+                                    Err _ ->
+                                        ( state, Cmd.none )
+
+                            Err _ ->
+                                ( state, Cmd.none )
+
                     Ok Frame ->
                         render config state
 
@@ -241,12 +256,18 @@ step config message ((State s) as state) =
                         ( state, send config "error" (Encode.string (Decode.errorToString problem)) )
 
 
-{-| What the page sends: an event, the animation frame we asked for, word
-that the last patches are on the page, a request for the whole view because
-the page lost track of it, or a request to stop.
+{-| What the page sends: an event, a question about an event that's still
+firing, the animation frame we asked for, word that the last patches are on
+the page, a request for the whole view because the page lost track of it, or
+a request to stop.
+
+The question comes with a reply object to answer on (see `answer`). Nothing
+else happens: the event itself follows as an ordinary `Event`.
+
 -}
 type Incoming
     = Event Routing.Incoming
+    | Decide Routing.Incoming Value
     | Frame
     | Painted
     | Remount
@@ -257,11 +278,36 @@ incoming : Decode.Decoder Incoming
 incoming =
     Decode.oneOf
         [ Decode.field "event" (Decode.map Event Routing.decoder)
+        , Decode.map2 Decide (Decode.field "decide" Routing.decoder) (Decode.field "reply" Decode.value)
         , Decode.field "frame" (Decode.succeed Frame)
         , Decode.field "painted" (Decode.succeed Painted)
         , Decode.field "remount" (Decode.succeed Remount)
         , Decode.field "shutdown" (Decode.succeed Shutdown)
         ]
+
+
+{-| Answer a handler made with `Event.advanced`, which decides
+`preventDefault` and `stopPropagation` per event. The page has to know before
+its listener returns, and a command can't promise that: after each batch of
+commands, a port waits for the event loop to come round before it hands over
+the next. Decoding happens right away, though, so the answer is in what this
+reads from the page's reply object: reading `preventDefault` says to prevent
+the default, and reading `stopPropagation` says to stop propagation.
+-}
+answer : { a | preventDefault : Bool, stopPropagation : Bool } -> Decode.Decoder ()
+answer handler =
+    Decode.map2 (\_ _ -> ())
+        (readIf handler.preventDefault "preventDefault")
+        (readIf handler.stopPropagation "stopPropagation")
+
+
+readIf : Bool -> String -> Decode.Decoder ()
+readIf yes field =
+    if yes then
+        Decode.field field (Decode.succeed ())
+
+    else
+        Decode.succeed ()
 
 
 updateWith : Config flags model msg -> msg -> State model msg -> ( State model msg, Cmd (Message msg) )

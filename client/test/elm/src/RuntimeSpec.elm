@@ -10,6 +10,7 @@ import Jorn.Effect as Effect exposing (Effect)
 import Jorn.Element as Element exposing (Element)
 import Jorn.Element.Html as Html
 import Jorn.Event as Event
+import Json.Decode as Decode
 import Json.Encode as Encode exposing (Value)
 import Task
 
@@ -25,6 +26,7 @@ type alias Model =
     , open : Bool
     , name : String
     , log : List String
+    , keys : List String
     }
 
 
@@ -35,12 +37,14 @@ type Msg
     | Before
     | Painted
     | FromTask
+    | Pressed String
+    | Bubbled String
 
 
 main : Jorn.Program Int Model Msg
 main =
     Jorn.application
-        { init = \count -> ( { count = count, open = False, name = "", log = [] }, Effect.none )
+        { init = \count -> ( { count = count, open = False, name = "", log = [], keys = [] }, Effect.none )
         , update = update
         , view = view
         , subscriptions = \_ -> Sub.none
@@ -78,6 +82,12 @@ update msg model =
         FromTask ->
             ( { model | log = model.log ++ [ "task" ] }, Effect.none )
 
+        Pressed key ->
+            ( { model | keys = model.keys ++ [ key ] }, Effect.none )
+
+        Bubbled key ->
+            ( { model | keys = model.keys ++ [ "bubbled " ++ key ] }, Effect.none )
+
 
 view : Model -> Element Msg
 view model =
@@ -91,4 +101,20 @@ view model =
             Element.none
         , Html.span [ Attr.id "name" ] [ Element.text model.name ]
         , Html.span [ Attr.id "log" ] [ Element.text (String.join "," model.log) ]
+        , Html.div [ Event.onKeydown Bubbled ]
+            [ Html.input
+                [ Attr.id "keys"
+                , Event.advanced "keydown"
+                    (Decode.map
+                        (\key ->
+                            { message = Pressed key
+                            , preventDefault = key == "Enter"
+                            , stopPropagation = key == "Escape"
+                            }
+                        )
+                        Event.key
+                    )
+                ]
+            ]
+        , Html.span [ Attr.id "pressed" ] [ Element.text (String.join "," model.keys) ]
         ]
