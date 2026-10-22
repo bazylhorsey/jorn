@@ -100,7 +100,7 @@ The client applies `preventDefault` and `stopPropagation` synchronously from the
 
 ## Client mode runtime
 
-A `Jorn.simple` or `Jorn.application` program running in the page talks to `start` in `client/jorn.js` through its two ports. Apps never see these messages. They're listed here for anyone hosting a program some other way.
+A `Jorn.simple`, `Jorn.application` or `Jorn.Navigation.application` program running in the page talks to `start` in `client/jorn.js` through its two ports. Apps never see these messages. They're listed here for anyone hosting a program some other way.
 
 Program to page, on `toJorn`:
 
@@ -110,14 +110,19 @@ Program to page, on `toJorn`:
 | `{ "frame": true }` | Send `{ "frame": true }` back on the next animation frame |
 | `{ "patches": [...], "instructions": [...], "painted": bool }` | Apply the patches, then run the instructions. If `painted` is `true`, send `{ "painted": true }` back once both are done |
 | `{ "mount": node, "painted": bool }` | The answer to `remount`. Render the view, and send `{ "painted": true }` back if `painted` is `true` |
+| `{ "navigate": instruction }` | Change the address (see [URL routing](#url-routing)) |
 | `{ "error": "..." }` | Log it. The program got an event or message it couldn't read |
+
+A program with URL routing adds `"routing": true` to every `mount`, and `"title": "..."` to a `mount` and to any `patches` message whose view changed the title. The page sets `document.title` to it.
 
 Page to program, on `fromJorn`:
 
 | Message | Program behavior |
 |---|---|
+| `{ "url": "..." }` | Sent once when the page starts the program, and again whenever the address changes. A program with URL routing starts with the first, and gets `onUrlChange` for the rest. Others ignore it |
 | `{ "event": { "path", "name", "event" } }` | Route the event to its handler and run `update` |
 | `{ "decide": { "path", "name", "event" }, "reply": object }` | Run the handler's decoder, but not `update`, and answer through `reply` before `send` returns (below) |
+| `{ "link": "..." }` | Someone clicked a link (see [URL routing](#url-routing)) |
 | `{ "frame": true }` | Run `beforePaint` messages, diff once, and send the patches and instructions |
 | `{ "painted": true }` | Run `afterPaint` messages |
 | `{ "remount": true }` | Send the whole view again, as `mount` |
@@ -127,6 +132,24 @@ The program asks for a frame only when something changed, and every message that
 
 **Answering `decide`.** The answer to an advanced handler's question can't go back as a message on `toJorn`: after each batch of commands, Elm's ports wait for the event loop to come round before handing over the next, and the browser's listener can't wait. A port's `send` runs `update` before it returns, though, so the program answers by reading `reply`, an object the page makes with a getter for each field: reading `reply.preventDefault` means prevent the default, and reading `reply.stopPropagation` means stop propagation. It reads neither for no. The event itself follows as an ordinary `event`, right away or once debounce and throttle let it go.
 
+## URL routing
+
+A program made with `Jorn.Navigation.application` owns the page's address. The page is where the address lives, so the program learns it from the page and asks the page to change it:
+
+- The page sends `{ "url": location.href }` when it starts the program. The program runs `init` with that URL, so it sends nothing before then. An address that isn't `http` or `https` can't be read as a URL, and the program reports an `error` and doesn't start.
+- Once a `mount` says `"routing": true`, the page takes over clicks on links (`a` elements with an `href`) inside the container, and listens for `popstate`. It leaves a click alone if a handler already called `preventDefault`, a modifier key or a button other than the main one was used, the link has a `target` or `download` attribute, or the link is inside a `<jorn-server-component>` within the container. For the rest it calls `preventDefault` and sends `{ "link": href }`, with `href` resolved against the page. The program compares it with the current address and gives the app `Internal` with the URL if the protocol, host and port match, and `External` with the string otherwise.
+- `navigate` instructions go out as soon as `update` returns them, not with the next frame's patches, and the page reports the address it ends up at with `{ "url": ... }`. So the URL the app sees is always the browser's.
+
+| `navigate` | Page behavior |
+|---|---|
+| `{ "push": url }` | `history.pushState`, then report the address |
+| `{ "replace": url }` | `history.replaceState`, then report the address |
+| `{ "go": n }` | `history.go(n)`. The `popstate` that follows reports the address |
+| `{ "load": url }` | `location.assign(url)`, leaving the app |
+| `{ "reload": skipCache }` | `location.reload()` |
+
+A navigation the browser refuses, such as pushing an address on another site, is reported with a console warning.
+
 ## Server mode
 
 The same program can run on a server instead, in `server/jorn.js`, with `stream` from `client/jorn.js` on the page, or a `<jorn-server-component>` element, which calls `stream` for itself. The program's messages are the ones above. The server answers `frame` itself, at most once every 16 ms, and logs `error`, so neither goes over the wire. Everything else travels as one JSON text message per websocket message.
@@ -135,10 +158,11 @@ Page to server:
 
 | Message | Server behavior |
 |---|---|
-| `{ "join": { "protocol": 0, "flags": ..., "csrfToken": "...", "session": "...", "seen": n } }` | Must be first. Start a session for this page, or resume the one named by `session`. Everything but `protocol` is optional, and the server decides what to do with `flags` and `csrfToken` |
+| `{ "join": { "protocol": 0, "flags": ..., "csrfToken": "...", "session": "...", "seen": n, "url": "..." } }` | Must be first. Start a session for this page, or resume the one named by `session`. Everything but `protocol` is optional, and the server decides what to do with `flags` and `csrfToken`. `url` is the page's address: a new session's program gets it as its first `url`, and a resumed one gets it if it differs from the last address the page reported, since the page may have moved while it was away |
 | `{ "event": { "path", "name", "event" } }` | Pass it to the program. `event` holds only the fields in the handler's `include` |
 | `{ "painted": true }` | Pass it to the program |
 | `{ "remount": true }` | The page couldn't apply a patch. Pass it to the program, which sends the whole view again |
+| `{ "url": "..." }`, `{ "link": "..." }` | Pass it to the program (see [URL routing](#url-routing)) |
 | `{ "ping": true }` | Answer `{ "pong": true }` |
 
 Anything else from the page is ignored. Server to page, each with a `seq` that counts up from 1 within a session (`pong` has none):
@@ -148,7 +172,10 @@ Anything else from the page is ignored. Server to page, each with a `seq` that c
 | `{ "seq": 1, "session": "..." }` | First in every new session. Keep the id, to resume with it |
 | `{ "seq": n, "mount": node, "painted": bool }` | Render the whole view, replacing what's there. If `painted` is `true`, send `{ "painted": true }` back |
 | `{ "seq": n, "patches": [...], "instructions": [...], "painted": bool }` | As in client mode: apply, run, and send `{ "painted": true }` back if asked |
+| `{ "seq": n, "navigate": instruction }` | As in client mode: change the address, and report it |
 | `{ "pong": true }` | Nothing. It only shows the server is there |
+
+`mount` and `patches` carry `routing` and `title` as in client mode.
 
 The program sends `mount` with `painted` when it answers `remount`, so `afterPaint` messages waiting on patches the page never applied still run.
 

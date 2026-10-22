@@ -40,6 +40,11 @@ jobs:
       - name: Memoized subtrees
         run: node memo.mjs
         working-directory: client/test
+      - run: $GITHUB_WORKSPACE/node_modules/.bin/elm make src/RouterSpec.elm --output=build/router.js
+        working-directory: client/test/elm
+      - name: URL routing
+        run: node routing.mjs
+        working-directory: client/test
       - run: $GITHUB_WORKSPACE/node_modules/.bin/elm make src/Main.elm --output=build/main.js
         working-directory: examples/todos
       - name: Todos example
@@ -55,6 +60,8 @@ jobs:
           node-version: 22
       - run: npm install --no-save elm@0.19.1-6
       - run: $GITHUB_WORKSPACE/node_modules/.bin/elm make src/RuntimeSpec.elm --output=build/runtime.js
+        working-directory: client/test/elm
+      - run: $GITHUB_WORKSPACE/node_modules/.bin/elm make src/RouterSpec.elm --output=build/router.js
         working-directory: client/test/elm
       - run: $GITHUB_WORKSPACE/node_modules/.bin/elm make src/Main.elm --output=build/main.js
         working-directory: examples/todos
@@ -85,6 +92,9 @@ jobs:
         working-directory: server/test
       - name: Todos example on a server
         run: node example.mjs server
+        working-directory: client/test
+      - name: URL routing on a server
+        run: node routing.mjs server
         working-directory: client/test
 
   elm-0-19-2:

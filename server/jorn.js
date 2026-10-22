@@ -45,11 +45,14 @@ const FRAME_MS = 16;
  * The program's ports other than `toJorn` and `fromJorn` are in `ports`, for
  * server code to talk to it.
  *
+ * `url` is the page's address. An app with URL routing (Jorn.Navigation)
+ * starts once it has one.
+ *
  * @param {{ init: (options: { flags?: unknown }) => { ports: Record<string, any> } }} program
- * @param {{ send: (message: object) => void, flags?: unknown, ports?: { toJorn?: string, fromJorn?: string }, log?: Pick<Console, "warn"> }} options
+ * @param {{ send: (message: object) => void, flags?: unknown, url?: string, ports?: { toJorn?: string, fromJorn?: string }, log?: Pick<Console, "warn"> }} options
  * @returns {{ ports: Record<string, any>, receive: (message: unknown) => void, close: () => void }}
  */
-export function session(program, { send, flags, ports = {}, log = console } = {}) {
+export function session(program, { send, flags, url, ports = {}, log = console } = {}) {
   if (typeof send !== "function") {
     throw new TypeError("Jorn: session needs a send function");
   }
@@ -77,17 +80,23 @@ export function session(program, { send, flags, ports = {}, log = console } = {}
   }
 
   // Frames are kept here and errors are logged here. Only what the page
-  // needs to draw goes over the wire.
+  // needs to draw, and where to take it, goes over the wire.
   function fromProgram(message) {
     if (!running) return;
     if (message.frame) requestFrame();
     if (message.error) log.warn(`Jorn: ${message.error}`);
-    if (message.mount) send(message.painted ? { mount: message.mount, painted: true } : { mount: message.mount });
-    if (message.patches) {
-      send({ patches: message.patches, instructions: message.instructions ?? [], painted: message.painted === true });
+    const title = typeof message.title === "string" ? { title: message.title } : {};
+    if (message.mount) {
+      send({ mount: message.mount, ...(message.painted && { painted: true }), ...(message.routing && { routing: true }), ...title });
     }
+    if (message.patches) {
+      send({ patches: message.patches, instructions: message.instructions ?? [], painted: message.painted === true, ...title });
+    }
+    if (message.navigate) send({ navigate: message.navigate });
   }
   out.subscribe(fromProgram);
+  // An app with URL routing starts once it knows where the page is.
+  if (typeof url === "string") into.send({ url });
 
   return {
     /**
@@ -98,8 +107,9 @@ export function session(program, { send, flags, ports = {}, log = console } = {}
     ports: otherPorts(app.ports, toJorn, fromJorn),
 
     /**
-     * Pass on a message from the page: an event, word that it painted, or a
-     * request for the whole view because it lost track.
+     * Pass on a message from the page: an event, word that it painted, a
+     * request for the whole view because it lost track, its new address, or
+     * a link someone clicked.
      */
     receive(message) {
       if (!running || message === null || typeof message !== "object") return;
@@ -107,6 +117,8 @@ export function session(program, { send, flags, ports = {}, log = console } = {}
       if (message.event !== undefined) into.send({ event: message.event });
       else if (message.painted === true) into.send({ painted: true });
       else if (message.remount === true) into.send({ remount: true });
+      else if (typeof message.url === "string") into.send({ url: message.url });
+      else if (typeof message.link === "string") into.send({ link: message.link });
     },
 
     /** Stop the program. Anything after this is ignored, and its ports go quiet. */
@@ -232,6 +244,7 @@ export function attach(
       this.expiry = null;
       this.program = null;
       this.ended = null; // What onSession asked to have called at the end.
+      this.url = undefined; // Where the page last said it was.
       live.set(this.id, this);
     }
 
@@ -242,7 +255,7 @@ export function attach(
       if (this.socket?.readyState === this.socket?.OPEN) this.socket.send(text);
     }
 
-    resume(socket, seen) {
+    resume(socket, seen, url) {
       if (this.socket) {
         // The page reconnected before its old socket noticed it was dead.
         this.socket.reason = "the page reconnected";
@@ -255,6 +268,13 @@ export function attach(
       info(`Jorn: ${this.name} resumed${replayable ? `, ${missed.length} messages behind` : ", too far behind to catch up, so it gets the whole view"}`);
       if (replayable) for (const message of missed) socket.send(message.text);
       else this.program.receive({ remount: true });
+      // The page may have moved while it was away, with the back button.
+      if (typeof url === "string" && url !== this.url) this.address(url);
+    }
+
+    address(url) {
+      this.url = url;
+      this.program.receive({ url });
     }
 
     // The page's socket closed. Wait for it to come back, unless it said goodbye.
@@ -321,6 +341,7 @@ export function attach(
 
       if (joined) {
         if (message?.ping === true) socket.send(JSON.stringify({ pong: true }));
+        else if (typeof message?.url === "string") current?.address(message.url);
         else current?.program?.receive(message);
         return;
       }
@@ -343,7 +364,7 @@ export function attach(
         const known = typeof join.session === "string" ? live.get(join.session) : undefined;
         if (known) {
           current = known;
-          known.resume(socket, join.seen);
+          known.resume(socket, join.seen, join.url);
           return;
         }
         if (live.size >= maxSessions) {
@@ -358,8 +379,9 @@ export function attach(
         // fresh mount replaces whatever it was showing.
         current = new Session(socket);
         current.send({ session: current.id });
+        if (typeof join.url === "string") current.url = join.url;
         try {
-          current.program = session(program, { flags: value, ports, log, send: (out) => current.send(out) });
+          current.program = session(program, { flags: value, url: current.url, ports, log, send: (out) => current.send(out) });
           const ended = onSession?.({ ports: current.program.ports, flags: value, request });
           if (typeof ended === "function") current.ended = ended;
         } catch (error) {

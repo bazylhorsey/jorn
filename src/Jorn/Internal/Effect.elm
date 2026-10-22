@@ -5,7 +5,9 @@ where each one runs.
 
 `Client` instructions go to the patcher with the next batch of patches, as
 JSON, because they have to happen after the DOM has caught up: focusing an
-input only works once the input exists.
+input only works once the input exists. `Navigate` instructions go to the
+page straight away, since the address has to change before the program
+hears about it.
 
 -}
 
@@ -19,6 +21,7 @@ type Effect msg
 type Item msg
     = Command (Cmd msg)
     | Client Value
+    | Navigate Value
     | BeforePaint msg
     | AfterPaint msg
 
@@ -36,6 +39,9 @@ mapItem f item =
 
         Client instruction ->
             Client instruction
+
+        Navigate instruction ->
+            Navigate instruction
 
         BeforePaint msg ->
             BeforePaint (f msg)

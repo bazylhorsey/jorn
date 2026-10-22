@@ -3,6 +3,8 @@ module EffectTest exposing (suite)
 import Expect
 import Jorn.Effect as Effect
 import Jorn.Internal.Effect as Internal exposing (Item(..))
+import Jorn.Internal.Navigation exposing (Key(..))
+import Jorn.Navigation as Navigation
 import Json.Encode as Encode
 import Test exposing (Test, describe, test)
 
@@ -19,6 +21,9 @@ describeItems (Internal.Effect items) =
 
                 Client instruction ->
                     Encode.encode 0 instruction
+
+                Navigate instruction ->
+                    "navigate " ++ Encode.encode 0 instruction
 
                 BeforePaint msg ->
                     "before " ++ Debug.toString msg
@@ -59,5 +64,28 @@ suite =
                         , """{"effect":"scroll-into-view","id":"c"}"""
                         , """{"effect":"event","name":"saved","detail":1}"""
                         , """{"effect":"client","name":"copy","payload":"x"}"""
+                        ]
+        , test "golden navigation instructions" <|
+            \_ ->
+                Effect.batch
+                    [ Navigation.pushUrl Key "/about"
+                    , Navigation.replaceUrl Key "?page=2"
+                    , Navigation.back Key 2
+                    , Navigation.forward Key 1
+                    , Navigation.back Key 0
+                    , Navigation.load "https://example.com/"
+                    , Navigation.reload
+                    , Navigation.reloadAndSkipCache
+                    ]
+                    |> Effect.map identity
+                    |> describeItems
+                    |> Expect.equal
+                        [ """navigate {"push":"/about"}"""
+                        , """navigate {"replace":"?page=2"}"""
+                        , """navigate {"go":-2}"""
+                        , """navigate {"go":1}"""
+                        , """navigate {"load":"https://example.com/"}"""
+                        , """navigate {"reload":false}"""
+                        , """navigate {"reload":true}"""
                         ]
         ]
