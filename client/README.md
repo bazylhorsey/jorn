@@ -19,6 +19,27 @@ app.shutdown(); // stop the program and empty the container
 
 The program has to declare two ports, `toJorn` and `fromJorn` (see the `Jorn` module). If yours have other names, pass `ports: { toJorn: "...", fromJorn: "..." }`.
 
+## Talking to a running app
+
+The page talks to a running app the way it would to any Elm program: through the program's own ports. Any port it declares besides `toJorn` and `fromJorn` is in `app.ports`, as it would be from `Elm.Main.init`:
+
+```elm
+port notify : (Value -> msg) -> Sub msg
+
+port saved : Value -> Cmd msg
+```
+
+```js
+const app = start(Elm.Main, document.getElementById("app"));
+
+app.ports.notify.send({ text: "New version available" }); // into the program
+app.ports.saved.subscribe((draft) => localStorage.setItem("draft", JSON.stringify(draft))); // out of it
+```
+
+Elm leaves out ports the program never uses. After `shutdown`, the program ignores its ports.
+
+When the program runs on a server, the page can't reach its ports. Server code can, with `attach`'s `onSession` (see [server/jorn.js](../server#talking-to-sessions)).
+
 ## Showing an app that runs on a server
 
 When the same program runs on a server with [server/jorn.js](../server), `stream` connects the page to it:
@@ -85,7 +106,7 @@ jorn.patch(patches); // after every update, with the output of Jorn.Patch.encode
 
 | | |
 |---|---|
-| `start(program, container, { flags, effects, ports })` | Run a compiled Jorn program in `container`. Returns `{ shutdown() }`. |
+| `start(program, container, { flags, effects, ports })` | Run a compiled Jorn program in `container`. Returns `{ ports, shutdown() }`, where `ports` are the program's own ports. |
 | `stream(container, url, { flags, csrfToken, effects, heartbeat })` | Show a program running on a server in `container`, over a websocket. Returns `{ close() }`. |
 | `defineServerComponent({ effects })` | Define `<jorn-server-component>`. Only the first call counts. |
 | `connect(container, { send, decide, raw, effects })` | Take over `container`. Its only child is the root of your view from here on. `effects` maps names to the functions `Effect.client` can call. `decide`, for a program in the same page, answers handlers made with `Event.advanced` with `{ preventDefault, stopPropagation }`, before it returns. |

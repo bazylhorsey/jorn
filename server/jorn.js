@@ -15,6 +15,9 @@
 // `session` is the part underneath: one running program and no transport,
 // for hosts that move the messages themselves.
 //
+// Server code reaches a running session through the program's own ports:
+// `attach` hands each session's ports to `onSession` as it starts.
+//
 // elm/http needs XMLHttpRequest, so the first session defines the one in
 // http.js globally if the process has none.
 
@@ -39,9 +42,12 @@ const FRAME_MS = 16;
  * Throws if the program won't start, for example when `flags` don't match
  * what its `init` expects.
  *
+ * The program's ports other than `toJorn` and `fromJorn` are in `ports`, for
+ * server code to talk to it.
+ *
  * @param {{ init: (options: { flags?: unknown }) => { ports: Record<string, any> } }} program
  * @param {{ send: (message: object) => void, flags?: unknown, ports?: { toJorn?: string, fromJorn?: string }, log?: Pick<Console, "warn"> }} options
- * @returns {{ receive: (message: unknown) => void, close: () => void }}
+ * @returns {{ ports: Record<string, any>, receive: (message: unknown) => void, close: () => void }}
  */
 export function session(program, { send, flags, ports = {}, log = console } = {}) {
   if (typeof send !== "function") {
@@ -85,6 +91,13 @@ export function session(program, { send, flags, ports = {}, log = console } = {}
 
   return {
     /**
+     * The program's other ports, by name: `send` into the ones it subscribes
+     * to, and `subscribe` to the ones it sends on. Elm leaves out ports the
+     * program never uses.
+     */
+    ports: otherPorts(app.ports, toJorn, fromJorn),
+
+    /**
      * Pass on a message from the page: an event, word that it painted, or a
      * request for the whole view because it lost track.
      */
@@ -96,7 +109,7 @@ export function session(program, { send, flags, ports = {}, log = console } = {}
       else if (message.remount === true) into.send({ remount: true });
     },
 
-    /** Stop the program. Anything after this is ignored. */
+    /** Stop the program. Anything after this is ignored, and its ports go quiet. */
     close() {
       if (!running) return;
       running = false;
@@ -127,6 +140,12 @@ export function session(program, { send, flags, ports = {}, log = console } = {}
  * when it missed too many to replay. A page that closes on purpose ends its
  * session straight away.
  *
+ * `onSession` is how server code reaches the sessions. It's called as each
+ * session starts, with the program's ports other than `toJorn` and
+ * `fromJorn`, the flags its `init` got, and the request that opened the
+ * socket. It can return a function, which is called when the session ends. If
+ * it throws, the session doesn't start.
+ *
  * @param {import("node:http").Server} server
  * @param {{
  *   program: object,
@@ -135,6 +154,7 @@ export function session(program, { send, flags, ports = {}, log = console } = {}
  *   authorize?: (context: { request: import("node:http").IncomingMessage, csrfToken: string | undefined }) => boolean | Promise<boolean>,
  *   origins?: string[],
  *   ports?: { toJorn?: string, fromJorn?: string },
+ *   onSession?: (session: { ports: Record<string, any>, flags: unknown, request: import("node:http").IncomingMessage }) => void | (() => void),
  *   heartbeat?: number,
  *   linger?: number,
  *   replay?: number,
@@ -154,6 +174,7 @@ export function attach(
     authorize,
     origins = [],
     ports,
+    onSession,
     heartbeat = 30_000,
     linger = 30_000,
     replay = 256,
@@ -210,6 +231,7 @@ export function attach(
       this.sent = []; // The last `replay` messages, for a page that reconnects.
       this.expiry = null;
       this.program = null;
+      this.ended = null; // What onSession asked to have called at the end.
       live.set(this.id, this);
     }
 
@@ -251,6 +273,11 @@ export function attach(
       clearTimeout(this.expiry);
       this.socket = null; // So its socket closing later doesn't wait for a page.
       live.delete(this.id);
+      try {
+        this.ended?.();
+      } catch (error) {
+        log.error(`Jorn: ${this.name}'s onSession cleanup failed: ${error?.message ?? error}`);
+      }
       this.program?.close();
       info(`Jorn: ${this.name} ended: ${reason}`);
     }
@@ -333,7 +360,10 @@ export function attach(
         current.send({ session: current.id });
         try {
           current.program = session(program, { flags: value, ports, log, send: (out) => current.send(out) });
+          const ended = onSession?.({ ports: current.program.ports, flags: value, request });
+          if (typeof ended === "function") current.ended = ended;
         } catch (error) {
+          current.program?.close();
           live.delete(current.id);
           current = null;
           throw error;
@@ -364,6 +394,11 @@ export function attach(
       return new Promise((resolve) => sockets.close(() => resolve()));
     },
   };
+}
+
+// A program's ports apart from the two Jorn talks to it on.
+function otherPorts(ports, toJorn, fromJorn) {
+  return Object.fromEntries(Object.entries(ports).filter(([name]) => name !== toJorn && name !== fromJorn));
 }
 
 function sameOrigin(origin, request) {

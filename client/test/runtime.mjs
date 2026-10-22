@@ -112,11 +112,25 @@ check($("pressed").textContent === "Enter,bubbled Enter,Enter,bubbled Enter,a,bu
 });
 check(!sent.some((message) => message.error), "no errors", { sent });
 
+// The program's own ports are the page's: send into one and hear back on
+// another. The two Jorn uses aren't handed out.
+check(JSON.stringify(Object.keys(app.ports).sort()) === '["add","total"]', "start returns the program's other ports", { ports: Object.keys(app.ports) });
+const totals = [];
+app.ports.total.subscribe((total) => totals.push(total));
+const before = Number($("increment").textContent);
+app.ports.add.send(10);
+await flushFrames();
+check($("increment").textContent === String(before + 10), "a message sent into a port updates the view", { got: $("increment").textContent });
+check(JSON.stringify(totals) === JSON.stringify([before + 10]), "and the program answers on its own port", { totals });
+
 // Shutdown.
 app.shutdown();
 check(container.childNodes.length === 0, "shutdown empties the container");
 app.shutdown();
 check(true, "a second shutdown is harmless");
+app.ports.add.send(1);
+await flushFrames();
+check(totals.length === 1 && container.childNodes.length === 0, "a stopped program ignores its ports", { totals });
 
 let threw = false;
 try {
@@ -130,4 +144,4 @@ if (failed) {
   console.log(`FAILED: ${failed} problems`);
   process.exit(1);
 }
-console.log("PASSED: the runtime batches messages into one render per frame and runs every kind of effect.");
+console.log("PASSED: the runtime batches messages into one render per frame, runs every kind of effect, and hands the page the program's own ports.");

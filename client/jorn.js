@@ -519,14 +519,18 @@ export function connect(container, { send, decide, raw = false, effects = {} } =
  *     flags,                                   // whatever your init expects
  *     effects: { copy: (text) => ... },        // for Effect.client
  *   });
+ *   app.ports.notify.send("Saved");            // the program's own ports
  *   app.shutdown();                            // stop and empty the container
  *
  * The program has to declare ports called `toJorn` and `fromJorn`. If yours
  * are named differently, pass `ports: { toJorn: "...", fromJorn: "..." }`.
+ * Any other ports it declares are the page's, in `ports`, as they would be
+ * from `Elm.Main.init`.
  *
  * @param {{ init: (options: { flags?: unknown }) => { ports: Record<string, any> } }} program
  * @param {Element} container
  * @param {{ flags?: unknown, effects?: Record<string, Function>, ports?: { toJorn?: string, fromJorn?: string } }} options
+ * @returns {{ ports: Record<string, any>, shutdown: () => void }}
  */
 export function start(program, container, { flags, effects = {}, ports = {} } = {}) {
   const { toJorn = "toJorn", fromJorn = "fromJorn" } = ports;
@@ -574,7 +578,14 @@ export function start(program, container, { flags, effects = {}, ports = {} } = 
   out.subscribe(receive);
 
   return {
-    /** Stop the program and empty the container. */
+    /**
+     * The program's other ports, by name: `send` into the ones it subscribes
+     * to, and `subscribe` to the ones it sends on. Elm leaves out ports the
+     * program never uses.
+     */
+    ports: otherPorts(app.ports, toJorn, fromJorn),
+
+    /** Stop the program and empty the container. Its ports go quiet. */
     shutdown() {
       if (!running) return;
       running = false;
@@ -837,6 +848,11 @@ function draw(jorn, message, painted) {
     jorn.run(message.instructions ?? []);
     if (message.painted) painted();
   }
+}
+
+// A program's ports apart from the two Jorn talks to it on.
+function otherPorts(ports, toJorn, fromJorn) {
+  return Object.fromEntries(Object.entries(ports).filter(([name]) => name !== toJorn && name !== fromJorn));
 }
 
 // Copy the requested dotted fields (like "target.value") off an event into

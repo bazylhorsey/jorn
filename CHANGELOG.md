@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Code outside a running app can talk to it through the program's own ports (#53). `start` returns the program's ports other than `toJorn` and `fromJorn`, as `Elm.Main.init` would, and so does `session`. `attach` takes `onSession`, called with each session's ports, the flags its `init` got, and the request that opened the socket as the session starts. A function it returns is called when the session ends, and if it throws, the session doesn't start. A stopped program ignores its ports. Nothing changes on the wire.
+- `examples/chat` is a chat room as a server component: each page has its own session, and a few lines of server code pass what one says to all of them through two ports. CI runs it with three pages.
+
 ## v0.3 (2026-10-21)
 
 Views and events: memoized subtrees, and handlers that decide `preventDefault` and `stopPropagation` for each event.

@@ -41,6 +41,11 @@ The same program can run on a server instead, with `attach` from
 Nothing in your Elm code changes: `update`, `view` and commands run on the
 server, and focus, scrolling and `Effect.client` run in the page.
 
+Any other ports your app declares are its own, for the JavaScript around it.
+`start` returns them, as `Elm.Main.init` would, and on a server `attach`
+hands each session's ports to your server code, so a message can reach a
+running app from outside it.
+
 
 # Programs
 

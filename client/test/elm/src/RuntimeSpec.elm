@@ -21,6 +21,15 @@ port toJorn : Value -> Cmd msg
 port fromJorn : (Value -> msg) -> Sub msg
 
 
+{-| The app's own ports, for JavaScript around it: `add` adds to the count,
+and `total` reports the count after each `add`.
+-}
+port add : (Int -> msg) -> Sub msg
+
+
+port total : Int -> Cmd msg
+
+
 type alias Model =
     { count : Int
     , open : Bool
@@ -39,6 +48,7 @@ type Msg
     | FromTask
     | Pressed String
     | Bubbled String
+    | Add Int
 
 
 main : Jorn.Program Int Model Msg
@@ -47,7 +57,7 @@ main =
         { init = \count -> ( { count = count, open = False, name = "", log = [], keys = [] }, Effect.none )
         , update = update
         , view = view
-        , subscriptions = \_ -> Sub.none
+        , subscriptions = \_ -> add Add
         , ports = { toJorn = toJorn, fromJorn = fromJorn }
         }
 
@@ -87,6 +97,9 @@ update msg model =
 
         Bubbled key ->
             ( { model | keys = model.keys ++ [ "bubbled " ++ key ] }, Effect.none )
+
+        Add n ->
+            ( { model | count = model.count + n }, Effect.fromCmd (total (model.count + n)) )
 
 
 view : Model -> Element Msg

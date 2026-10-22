@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Jorn chat</title>
+    <style>
+      body { font: 18px/1.5 system-ui, sans-serif; margin: 3rem auto; max-width: 30rem; padding: 0 1rem; }
+      header { display: flex; align-items: baseline; justify-content: space-between; }
+      header p { color: #666; margin: 0; }
+      /* column-reverse keeps the log scrolled to the newest line. */
+      .log { display: flex; flex-direction: column-reverse; height: 20rem; overflow-y: auto; border: 1px solid #ddd; padding: 0 0.6rem; }
+      ol { list-style: none; padding: 0; margin: 0.4rem 0; }
+      .note { color: #888; font-style: italic; }
+      form { display: flex; gap: 0.5rem; margin-top: 0.6rem; }
+      input { font: inherit; flex: 1; padding: 0.4rem 0.6rem; }
+      button { font: inherit; }
+      [data-jorn-connection="reconnecting"] { opacity: 0.5; }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <script type="module">
+      import { stream } from "../../client/jorn.js";
+
+      // The program runs on the server, one session per page. Open this
+      // page in two tabs to see them talk.
+      stream(document.getElementById("app"), "socket");
+    </script>
+  </body>
+</html>
