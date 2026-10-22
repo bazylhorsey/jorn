@@ -87,7 +87,7 @@ The full feature set comes first. These build on it, and start once 1.0 is out.
 | Generated encoders for types shared by the browser and the server | todo | For apps running in the browser that talk to a server. Server components don't need them: only events and patches cross the network. |
 | Keeping sessions across a deploy | todo | Reattach each page to its session when the new version starts. |
 | Session snapshots and typed migrations across deploys | todo | |
-| REST endpoints written in Elm | todo | |
+| Typed SQL queries | todo | Elm functions and decoders generated from `.sql` files and the types the database reports for them, running through server effects. |
 | Bun and Deno | todo | |
 
 ## Performance
