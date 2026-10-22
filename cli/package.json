@@ -1,0 +1,15 @@
+{
+  "name": "jorn-cli",
+  "version": "0.0.0",
+  "description": "The jorn command: builds a Jorn.Static site into a folder any static host can serve.",
+  "license": "BSD-3-Clause",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "jorn": "./jorn.mjs"
+  },
+  "exports": "./build.mjs",
+  "engines": {
+    "node": ">=22"
+  }
+}

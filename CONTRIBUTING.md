@@ -29,6 +29,14 @@ CI runs the same three, plus the browser patcher's, runtime's and server's tests
 (cd client/test && npm install && node run.mjs && node runtime.mjs && node memo.mjs && node routing.mjs && node example.mjs)
 ```
 
+If you touch `cli/`, `Jorn.Static` or the site example, build the example site with `jorn build`, then run its test and the command's own:
+
+```
+(cd examples/site && node ../../cli/jorn.mjs build)
+(cd client/test && npm install && node site.mjs)
+(cd cli/test && node build.mjs)
+```
+
 If you touch `server/` or `stream`, build `RuntimeSpec.elm`, `RouterSpec.elm` and the todos example as above, and the server's HTTP test app and the chat example, then run the server's tests, and the todos example and the routing test in server mode:
 
 ```
@@ -45,7 +53,8 @@ If you touch `server/` or `stream`, build `RuntimeSpec.elm`, `RouterSpec.elm` an
 - `src/Jorn/Internal/` is everything else. `Vdom` is the tree and its normalized form, `Patch` is the diff and the encoder, and `Runtime` is the loop every program runs, with or without URL routing.
 - `tests/DiffTest.elm` has golden tests that pin the wire format byte for byte. If you change what goes over the wire, update [PROTOCOL.md](PROTOCOL.md) in the same pull request.
 - `tests/Reference.elm` is an executable spec of the browser patcher: it applies patches to a tree in Elm, and the fuzz tests check that applying `diff a b` to `a` always gives `b`.
-- `examples/` holds runnable examples. Each is an Elm application that pulls in `../../src`, written the way an app using Jorn would be. `client/test/example.mjs` uses the todos example in jsdom, and `server/test/chat.mjs` the chat example.
+- `examples/` holds runnable examples. Each is an Elm application that pulls in `../../src`, written the way an app using Jorn would be. `client/test/example.mjs` uses the todos example in jsdom, `server/test/chat.mjs` the chat example, and `client/test/site.mjs` the pages `jorn build` makes from the site example.
+- `cli/` is the `jorn` command. `cli/build.mjs` runs a `Jorn.Static` site in Node and writes the site it describes. `cli/test/build.mjs` builds small sites in a temporary project, with every kind of path and asset and the mistakes the build has to stop at.
 - `server/jorn.js` is the server runtime. `server/test/run.mjs` runs a session on its own, then pages in jsdom against a real server and real sockets. `server/test/reconnect.mjs` breaks those connections on purpose.
 - `server/http.js` is the `XMLHttpRequest` that elm/http uses on the server. `server/test/http.mjs` uses it the way elm/http does, against a local HTTP server, and `server/test/http-elm.mjs` runs elm/http itself in a server component.
 - `client/jorn.js` is the browser patcher. `client/test/run.mjs` checks it in jsdom: unit tests for live form state and events, then thousands of random view sequences generated in Elm, checking the DOM after every patch and routing every event back through `Jorn.Internal.Event`. `client/test/runtime.mjs` runs a small app through `Jorn.application` and `start`, checking batching and every kind of effect. `client/test/memo.mjs` counts how often the rows of a memoized list are built. `client/test/routing.mjs` clicks every kind of link in an app with URL routing and runs every navigation effect, in the page and, with `server`, on a server.
@@ -53,5 +62,5 @@ If you touch `server/` or `stream`, build `RuntimeSpec.elm`, `RouterSpec.elm` an
 ## Style
 
 - Format with `elm-format`.
-- Keep the package free of kernel code and ports. Anything that has to be JavaScript lives outside the Elm package, in `client/` or `server/`.
+- Keep the package free of kernel code and ports. Anything that has to be JavaScript lives outside the Elm package, in `client/`, `server/` or `cli/`.
 - Prefer plain names and short doc comments that say what a function does and anything surprising about it.

@@ -50,6 +50,15 @@ jobs:
       - name: Todos example
         run: node example.mjs
         working-directory: client/test
+      - name: Example site, built with jorn build
+        run: node ../../cli/jorn.mjs build
+        working-directory: examples/site
+      - name: Example site in the browser
+        run: node site.mjs
+        working-directory: client/test
+      - name: jorn build
+        run: node build.mjs
+        working-directory: cli/test
 
   server:
     runs-on: ubuntu-latest

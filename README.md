@@ -69,9 +69,12 @@ stream(document.getElementById("app"), "/app");
 | `Jorn.Element`, `Jorn.Element.Html`, `Jorn.Attribute`, `Jorn.Event` | Build views. Ordinary Elm data, like `elm/html`. |
 | `Jorn`, `Jorn.Effect` | Run an app in the page: `init`, `update`, `view`, and effects. |
 | `Jorn.Patch` | Diff two views and encode the patches as JSON. |
+| `Jorn.Navigation` | URL routing: `Browser.application` and `Browser.Navigation` for Jorn. |
 | `Jorn.ServerComponent` | Put a server component anywhere in a page, as an element. |
+| `Jorn.Static` | Describe a static site in Elm: pages from your views, and the files that go with them. |
 | [`client/jorn.js`](client/jorn.js) | The browser side: apply patches to the DOM and report events back. No dependencies. |
 | [`server/jorn.js`](server/jorn.js) | The server side: run a program on Node, one session per page, over a websocket. |
+| [`cli/jorn.mjs`](cli/jorn.mjs) | `jorn build`: write a `Jorn.Static` site to a folder that any static host serves. |
 
 [examples/todos](examples/todos) is a complete app, written the way Jorn apps are meant to be. Underneath, the page and the program only exchange JSON: events go in, and only what changed comes back out. A click and a keystroke look like this:
 
@@ -89,7 +92,7 @@ The wire format is specified in [PROTOCOL.md](PROTOCOL.md).
 
 ### Using it
 
-Jorn isn't on the Elm package registry yet. To try it, clone this repo, add its `src` folder to your application's `source-directories` in `elm.json` alongside a dependency on `elm/json` (and `elm/url`, for URL routing with `Jorn.Navigation`), and load `client/jorn.js` in your page. For server mode, also run `npm install` in `server/`. [examples/todos](examples/todos) shows the wiring, and `examples/serve.mjs` runs it both ways.
+Jorn isn't on the Elm package registry yet. To try it, clone this repo, add its `src` folder to your application's `source-directories` in `elm.json` alongside a dependency on `elm/json` (and `elm/url`, for URL routing with `Jorn.Navigation`), and load `client/jorn.js` in your page. For server mode, also run `npm install` in `server/`. [examples/todos](examples/todos) shows the wiring, and `examples/serve.mjs` runs it both ways. To build an app as a static site, see [cli/README.md](cli/README.md) and [examples/site](examples/site).
 
 ## When to use it
 

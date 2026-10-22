@@ -65,6 +65,7 @@ Statuses: **done** is available today. **partial** is available with a stated di
 | Server-side rendering and hydration | todo | |
 | Server components over server-sent events or polling | todo | For hosts and proxies that don't allow websockets. |
 | URL routing | done | `Jorn.Navigation`, in the shape of `Browser.application` and `Browser.Navigation`: `init` gets the URL, link clicks become `onUrlRequest`, `onUrlChange` follows every change of address, and the view sets the title. Works in server mode: the page reports where it is and which links were clicked. |
+| Static site build | done | `Jorn.Static` describes a site in Elm, and `jorn build` from [cli/](cli) writes it to a folder any static host serves: a page for each route from the app's own view, the app compiled, and a hash in each script's and stylesheet's URL. The app mounts over each page's HTML, and will adopt it once hydration lands. |
 | Messaging a running app from JavaScript | done | Through the program's own ports. `start` returns them, and `attach` hands each session's ports to server code as it starts, so a server can reach every open page. The chat example passes messages between pages this way. |
 
 ## Tooling and testing
@@ -73,7 +74,7 @@ Statuses: **done** is available today. **partial** is available with a stated di
 |---|---|---|
 | Query a view (find by tag, class, id, text, ...) | todo | |
 | Simulate an app (send messages and events, inspect model and view) | todo | |
-| Dev server and build command | todo | |
+| Dev server and build command | partial | `jorn build` builds static sites. A dev server, and a production build for apps on a server, come later. |
 | JavaScript written in TypeScript, with built files on each release | todo | |
 
 ## After 1.0

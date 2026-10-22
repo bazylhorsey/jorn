@@ -47,7 +47,8 @@ hands each session's ports to your server code, so a message can reach a
 running app from outside it.
 
 For an app that owns the page's address, with links and the back button
-handled in Elm, see `Jorn.Navigation`.
+handled in Elm, see `Jorn.Navigation`. To build one as a static site, with a
+page of HTML for each of its routes, see `Jorn.Static`.
 
 
 # Programs
