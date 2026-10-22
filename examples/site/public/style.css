@@ -1,0 +1,68 @@
+body {
+  font: 18px/1.6 system-ui, sans-serif;
+  color: #222;
+  margin: 0 auto;
+  max-width: 36rem;
+  padding: 2rem 1rem;
+}
+
+header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 2rem;
+}
+
+header .name {
+  font-weight: bold;
+  color: inherit;
+  text-decoration: none;
+}
+
+nav {
+  display: flex;
+  gap: 1rem;
+}
+
+nav a[aria-current="page"] {
+  color: inherit;
+  text-decoration: none;
+  font-weight: bold;
+}
+
+input[type="search"] {
+  font: inherit;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.4rem 0.6rem;
+}
+
+.posts {
+  list-style: none;
+  padding: 0;
+}
+
+.posts li {
+  padding: 1rem 0;
+  border-bottom: 1px solid #ddd;
+}
+
+.posts li a {
+  font-weight: bold;
+}
+
+.posts li p {
+  margin: 0.25rem 0 0;
+}
+
+time {
+  display: block;
+  color: #777;
+  font-size: 0.85em;
+}
+
+footer {
+  margin-top: 3rem;
+  color: #777;
+  font-size: 0.85em;
+}

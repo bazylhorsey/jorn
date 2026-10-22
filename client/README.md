@@ -19,6 +19,8 @@ app.shutdown(); // stop the program and empty the container
 
 The program has to declare two ports, `toJorn` and `fromJorn` (see the `Jorn` module). If yours have other names, pass `ports: { toJorn: "...", fromJorn: "..." }`.
 
+The container can already hold the app's HTML, as each page from `jorn build` does (see [cli/](../cli)). `start` mounts the app over it, and when the app's view at that address is the same, nothing changes on screen.
+
 ## Talking to a running app
 
 The page talks to a running app the way it would to any Elm program: through the program's own ports. Any port it declares besides `toJorn` and `fromJorn` is in `app.ports`, as it would be from `Elm.Main.init`:
