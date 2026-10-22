@@ -4,7 +4,7 @@
 
 Jorn is an attempt to build the web framework that doesn't make you choose. Today every serious option wins on one axis by giving up another. Jorn's bet is that with the right language, you can have all of them at once.
 
-> **Status: v0.3.** You can build apps with Jorn and run them in the browser or on a Node server: every HTML, SVG and MathML element, attributes and ARIA, keyed lists, fragments, memoized subtrees, raw HTML, handlers that decide `preventDefault` for each event, effects, an app runtime, rendering to HTML strings, and server components that reconnect and catch up, on a pure Elm virtual DOM with a tested wire protocol and patcher. URL routing and server-side rendering are next. The rest of this page describes where it's going. See the [roadmap](ROADMAP.md).
+> **Status: v0.4.** You can build apps with Jorn and run them in the browser, on a Node server, or as a static site: every HTML, SVG and MathML element, attributes and ARIA, keyed lists, fragments, memoized subtrees, raw HTML, handlers that decide `preventDefault` for each event, effects, an app runtime with URL routing, rendering to HTML strings, static site builds, and server components that reconnect, catch up, and talk to your server code through their own ports, on a pure Elm virtual DOM with a tested wire protocol and patcher. Components as custom elements, and server-side rendering with hydration, are next. The rest of this page describes where it's going. See the [roadmap](ROADMAP.md).
 
 ## What v0.2 gives you
 
@@ -96,25 +96,25 @@ Jorn isn't on the Elm package registry yet. To try it, clone this repo, add its 
 
 ## When to use it
 
-As of v0.2, Jorn's strength is running an app on a server, or keeping that choice open. It's a good choice for:
+As of v0.4, Jorn's strength is running an app on a server, or keeping that choice open. It's a good choice for:
 
-- **Internal tools and admin dashboards.** `update` can query your database directly, so there's no API to build, and the page needs only a small script.
+- **Internal tools and admin dashboards.** `update` runs on your server, and the program's own ports connect it to your server code and its database, so there's no API to build, and the page needs only a small script.
 - **Widgets inside an existing site.** `<jorn-server-component>` drops a server-run component into a page from any stack: a quote calculator, a booking form, a support panel.
 - **Logic that has to stay private.** Pricing rules, exam answers or licensed features never leave the server. The page sees only what they render.
 - **Live status pages.** Each session fetches from your backends with `elm/http` and sends the page only what changed.
 - **Apps that may move between the browser and the server.** In client mode the program runs in the page, and moving it to a server later changes how it's started, not the program. A client-mode app can also put server components in its view, so one page can mix both.
+- **Live multi-user apps**, like chat. Server code reaches every open session through the program's own ports, so what one person does can reach everyone. [examples/chat](examples/chat) is a chat room with a few lines of server code.
+- **Content sites with interactive parts**, like blogs, docs and portfolios. `jorn build` writes a whole HTML page for every route, for search engines and the first paint, and the app takes over in the browser. [examples/site](examples/site) is a small blog built that way.
 
 It's not a good choice, yet or at all, for:
 
-- **Apps that will only ever run in the browser.** Plain Elm is better there for now: Jorn has no URL routing yet.
 - **Views built with elm/html libraries** like elm-ui or elm-css. They produce elm/html's `Html`, which Jorn can't render.
 - **Debugging with Elm's time-travel debugger.** It only works with `Browser` programs, and Jorn's aren't.
 - **Offline-first apps, or users on slow or flaky connections.** In server mode, every click is a round trip.
 
 Later versions widen this (see the [roadmap](#roadmap)):
 
-- **v0.4:** URL routing, which makes browser-only apps a fair alternative to plain Elm. Also server-side rendering, for content sites with interactive parts, and sessions that can talk to each other, for chat and other live multi-user apps.
-- **v0.5:** custom elements, for sharing Elm components with teams on React or Vue.
+- **v0.5:** custom elements, for sharing Elm components with teams on React or Vue. Also server-side rendering with hydration, so the HTML from a server or from `jorn build` becomes the running app instead of being replaced by it, and server effects, so `update` can ask your server code for something, like a database query, and get the answer back as a message.
 
 ## The problem, in plain terms
 
@@ -191,11 +191,11 @@ On the server, a small JavaScript runtime runs each connected user's session as 
 | v0.2 | Server components: a Node runtime over a websocket, with reconnects, limits and elm/http | **Done** |
 | v0.2.1 | MathML elements, raw HTML, rendering to HTML strings, and form submits with their fields | **Done** |
 | v0.3 | The rest of the view layer: memoized subtrees and per-event `preventDefault` | **Done** |
-| v0.4 | Server-side rendering and hydration, URL routing, server-sent events and polling, messaging a running app from JavaScript | Next |
-| v0.5 | Components as custom elements: shadow DOM, slots, forms, lifecycle and contexts | Planned |
+| v0.4 | URL routing, static site builds, and messaging a running app from JavaScript | **Done** |
+| v0.5 | Components as custom elements (shadow DOM, slots, forms, lifecycle and contexts), server-side rendering with hydration, and calling server code from `update` | Next |
 | v0.6 | A dev server and build command, querying and simulating apps in tests, and the JavaScript written in TypeScript | Planned |
-| v1.0 | The full feature set, published to the Elm package registry | Planned |
-| After 1.0 | Generated encoders for types shared by the browser and the server, sessions kept across deploys with typed migrations, REST endpoints written in Elm, and Bun and Deno | Future work |
+| v1.0 | The full feature set, including server components over server-sent events and polling, published to the Elm package registry | Planned |
+| After 1.0 | Generated encoders for types shared by the browser and the server, sessions kept across deploys with typed migrations, typed SQL queries, and Bun and Deno | Future work |
 
 Server components already need no API layer: `update` runs on the server, and only events and patches cross the network. After 1.0, generated encoders bring the same to apps running in the browser, and typed migrations let a deploy keep every session. Those finish the "no API layer" and "deploys that don't drop anyone" parts of the claim above, once the full feature set is done. Throughout, the aim is for Jorn to be as fast as Elm allows. Feature-by-feature status is in [ROADMAP.md](ROADMAP.md).
 

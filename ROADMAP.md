@@ -66,6 +66,7 @@ Statuses: **done** is available today. **partial** is available with a stated di
 | Server components over server-sent events or polling | todo | For hosts and proxies that don't allow websockets. |
 | URL routing | done | `Jorn.Navigation`, in the shape of `Browser.application` and `Browser.Navigation`: `init` gets the URL, link clicks become `onUrlRequest`, `onUrlChange` follows every change of address, and the view sets the title. Works in server mode: the page reports where it is and which links were clicked. |
 | Static site build | done | `Jorn.Static` describes a site in Elm, and `jorn build` from [cli/](cli) writes it to a folder any static host serves: a page for each route from the app's own view, the app compiled, and a hash in each script's and stylesheet's URL. The app mounts over each page's HTML, and will adopt it once hydration lands. |
+| Calling server code from `update`, like a database query | todo | An effect that asks the program's host for named work and gets the answer back as a message: your server code in server mode, the page in client mode. |
 | Messaging a running app from JavaScript | done | Through the program's own ports. `start` returns them, and `attach` hands each session's ports to server code as it starts, so a server can reach every open page. The chat example passes messages between pages this way. |
 
 ## Tooling and testing
@@ -86,7 +87,7 @@ The full feature set comes first. These build on it, and start once 1.0 is out.
 | Generated encoders for types shared by the browser and the server | todo | For apps running in the browser that talk to a server. Server components don't need them: only events and patches cross the network. |
 | Keeping sessions across a deploy | todo | Reattach each page to its session when the new version starts. |
 | Session snapshots and typed migrations across deploys | todo | |
-| REST endpoints written in Elm | todo | |
+| Typed SQL queries | todo | Elm functions and decoders generated from `.sql` files and the types the database reports for them, running through server effects. |
 | Bun and Deno | todo | |
 
 ## Performance

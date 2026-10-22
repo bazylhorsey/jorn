@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## v0.4 (2026-10-22)
+
+Routing and static sites: URL routing, static site builds, and talking to a running app through its own ports.
 
 - Code outside a running app can talk to it through the program's own ports (#53). `start` returns the program's ports other than `toJorn` and `fromJorn`, as `Elm.Main.init` would, and so does `session`. `attach` takes `onSession`, called with each session's ports, the flags its `init` got, and the request that opened the socket as the session starts. A function it returns is called when the session ends, and if it throws, the session doesn't start. A stopped program ignores its ports. Nothing changes on the wire.
 - `Jorn.Navigation` gives apps URL routing, in the shape of `Browser.application` and `Browser.Navigation` (#54). `Navigation.application` makes a program whose `init` gets the URL and a `Key`, whose `view` gives a `Document` with the page's title, and which hears `onUrlRequest` when someone clicks a link in the app and `onUrlChange` when the address changes. `pushUrl`, `replaceUrl`, `back` and `forward` take the `Key`, and `load`, `reload` and `reloadAndSkipCache` leave the app. The page is where the address lives: it tells the program where it is, takes over clicks on links in the app's element the way elm/browser does, and runs navigation as soon as `update` asks, reporting the address it lands on. In server mode the page sends its address when it joins, and a page that reconnects after moving tells its session. Only apps that import `Jorn.Navigation` need `elm/url`. `Jorn.simple` and `Jorn.application` are unchanged, and share their runtime with it.
