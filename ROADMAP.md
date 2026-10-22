@@ -64,8 +64,8 @@ Statuses: **done** is available today. **partial** is available with a stated di
 | Components as custom elements (attributes, properties, slots, form association) | todo | |
 | Server-side rendering and hydration | todo | |
 | Server components over server-sent events or polling | todo | For hosts and proxies that don't allow websockets. |
-| URL routing | todo | Jorn programs run on `Platform.worker`, which has no `Browser.Navigation`. |
-| Messaging a running app from JavaScript | todo | Through the program's own ports. |
+| URL routing | done | `Jorn.Navigation`, in the shape of `Browser.application` and `Browser.Navigation`: `init` gets the URL, link clicks become `onUrlRequest`, `onUrlChange` follows every change of address, and the view sets the title. Works in server mode: the page reports where it is and which links were clicked. |
+| Messaging a running app from JavaScript | done | Through the program's own ports. `start` returns them, and `attach` hands each session's ports to server code as it starts, so a server can reach every open page. The chat example passes messages between pages this way. |
 
 ## Tooling and testing
 

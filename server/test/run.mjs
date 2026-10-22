@@ -92,10 +92,24 @@ function quietLog() {
   check(sent.length === 0, "nothing goes to the page for a bad event", { sent });
   check(log.lines.some((line) => line.includes("No node at path [9]")), "the bad event is logged", { lines: log.lines });
 
+  // Server code talks to the program through its own ports.
+  check(JSON.stringify(Object.keys(s.ports).sort()) === '["add","total"]', "a session has the program's other ports", { ports: Object.keys(s.ports) });
+  const totals = [];
+  s.ports.total.subscribe((total) => totals.push(total));
+  sent.length = 0;
+  s.ports.add.send(100);
+  await until(() => sent.length > 0 && totals.length > 0, "patches and an answer after a message into a port");
+  check(JSON.stringify(sent[0]?.patches) === '[{"op":"set-text","path":[0,0],"text":"109"}]', "the message updates the view", { sent });
+  check(JSON.stringify(totals) === "[109]", "the program answers on its own port", { totals });
+
+  sent.length = 0;
   s.close();
   click([0]);
   await wait(40);
   check(sent.length === 0, "a closed session ignores the page", { sent });
+  s.ports.add.send(1);
+  await wait(40);
+  check(sent.length === 0 && totals.length === 1, "and its ports", { sent, totals });
   s.close();
   check(true, "a second close is harmless");
 
@@ -122,6 +136,27 @@ const guarded = attach(server, {
   program: Elm.RuntimeSpec,
   flags: () => 1,
   authorize: ({ csrfToken }) => csrfToken === "secret",
+  log,
+});
+// Server code that keeps every session's ports, as a chat server would.
+const hooked = [];
+const hooks = attach(server, {
+  path: "/hooked",
+  program: Elm.RuntimeSpec,
+  flags: ({ page }) => page,
+  onSession(started) {
+    const entry = { ...started, totals: [], ended: 0 };
+    started.ports.total.subscribe((total) => entry.totals.push(total));
+    hooked.push(entry);
+    if (started.flags === 13) throw new Error("unlucky");
+    if (started.flags === 7) {
+      return () => {
+        entry.ended++;
+        throw new Error("cleanup failed");
+      };
+    }
+    return () => entry.ended++;
+  },
   log,
 });
 const broken = attach(server, {
@@ -181,6 +216,56 @@ const broken = attach(server, {
   other.window.close();
 }
 
+// ---- Server code reaching sessions --------------------------------------------
+
+function connectRaw(path, options = {}) {
+  return new WebSocket(`ws://127.0.0.1:${port}${path}`, options);
+}
+
+function closed(socket) {
+  return new Promise((resolve) => {
+    socket.on("close", (code, reason) => resolve({ code, reason: reason.toString() }));
+    socket.on("error", () => {});
+    socket.on("unexpected-response", (request, response) => resolve({ status: response.statusCode }));
+  });
+}
+
+{
+  const pages = [3, 7].map((flags) => {
+    const { window } = new JSDOM("<!doctype html><html><body><div id=app></div></body></html>", { url: `${origin}/` });
+    const page = stream(window.document.getElementById("app"), "/hooked", { flags });
+    return { window, page, count: () => window.document.getElementById("increment")?.textContent };
+  });
+  await until(() => pages.every((page) => page.count() !== undefined), "two pages mount");
+  check(hooked.length === 2 && hooks.sessions === 2, "onSession is called once for each session", { hooked: hooked.length });
+  const [first, second] = hooked.sort((a, b) => a.flags - b.flags);
+  check(first.flags === 3 && second.flags === 7, "with the flags its init got", { flags: hooked.map((entry) => entry.flags) });
+  check(typeof first.request?.headers?.host === "string", "and the request that opened the socket");
+  check(JSON.stringify(Object.keys(first.ports).sort()) === '["add","total"]', "and the program's other ports", { ports: Object.keys(first.ports) });
+
+  first.ports.add.send(10);
+  await until(() => pages[0].count() === "13", "a message from server code reaches one page");
+  check(pages[1].count() === "7", "and only that page");
+  await until(() => first.totals.length === 1, "the program answers on its own port");
+  check(JSON.stringify(first.totals) === "[13]", "with the new count", { totals: first.totals });
+
+  pages[0].page.close();
+  await until(() => first.ended === 1, "the function onSession returned is called when the session ends");
+  check(second.ended === 0, "only for the session that ended");
+  pages[1].page.close();
+  await until(() => second.ended === 1, "a cleanup that throws");
+  await until(() => hooks.sessions === 0, "still ends its session");
+  check(log.lines.some((line) => line.includes("cleanup failed")), "and the error is logged", { lines: log.lines });
+  for (const { window } of pages) window.close();
+
+  // A session whose onSession throws doesn't start.
+  const unlucky = connectRaw("/hooked");
+  unlucky.on("open", () => unlucky.send(JSON.stringify({ join: { protocol: 0, flags: 13 } })));
+  check((await closed(unlucky)).code === 1011, "a session onSession throws for closes the socket");
+  check(hooks.sessions === 0, "and doesn't keep running", { sessions: hooks.sessions });
+  check(log.lines.some((line) => line.includes("unlucky")), "and says why in the log", { lines: log.lines });
+}
+
 // ---- <jorn-server-component> ----------------------------------------------------
 
 {
@@ -231,18 +316,6 @@ const broken = attach(server, {
 
 // ---- Refusals ----------------------------------------------------------------------
 
-function connectRaw(path, options = {}) {
-  return new WebSocket(`ws://127.0.0.1:${port}${path}`, options);
-}
-
-function closed(socket) {
-  return new Promise((resolve) => {
-    socket.on("close", (code, reason) => resolve({ code, reason: reason.toString() }));
-    socket.on("error", () => {});
-    socket.on("unexpected-response", (request, response) => resolve({ status: response.statusCode }));
-  });
-}
-
 {
   const evil = connectRaw("/app", { origin: "https://evil.example" });
   check((await closed(evil)).status === 403, "a page from another site is refused");
@@ -276,6 +349,7 @@ function closed(socket) {
 }
 
 await app.close();
+await hooks.close();
 await broken.close();
 await guarded.close();
 await new Promise((resolve) => server.close(resolve));
@@ -284,4 +358,4 @@ if (failed) {
   console.log(`FAILED: ${failed} problems`);
   process.exit(1);
 }
-console.log("PASSED: the server runs one program per page, batches renders, runs every kind of effect over the socket, and refuses what it should.");
+console.log("PASSED: the server runs one program per page, batches renders, runs every kind of effect over the socket, hands server code each session's ports, and refuses what it should.");

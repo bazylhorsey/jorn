@@ -519,14 +519,18 @@ export function connect(container, { send, decide, raw = false, effects = {} } =
  *     flags,                                   // whatever your init expects
  *     effects: { copy: (text) => ... },        // for Effect.client
  *   });
+ *   app.ports.notify.send("Saved");            // the program's own ports
  *   app.shutdown();                            // stop and empty the container
  *
  * The program has to declare ports called `toJorn` and `fromJorn`. If yours
  * are named differently, pass `ports: { toJorn: "...", fromJorn: "..." }`.
+ * Any other ports it declares are the page's, in `ports`, as they would be
+ * from `Elm.Main.init`.
  *
  * @param {{ init: (options: { flags?: unknown }) => { ports: Record<string, any> } }} program
  * @param {Element} container
  * @param {{ flags?: unknown, effects?: Record<string, Function>, ports?: { toJorn?: string, fromJorn?: string } }} options
+ * @returns {{ ports: Record<string, any>, shutdown: () => void }}
  */
 export function start(program, container, { flags, effects = {}, ports = {} } = {}) {
   const { toJorn = "toJorn", fromJorn = "fromJorn" } = ports;
@@ -558,6 +562,7 @@ export function start(program, container, { flags, effects = {}, ports = {} } = 
 
   const jorn = connect(container, { send: (event) => into.send({ event }), decide, raw: true, effects });
   const view = container.ownerDocument.defaultView;
+  const routes = router(container, (message) => running && into.send(message));
   // One render per animation frame, however many messages arrive before it.
   const nextFrame =
     typeof view?.requestAnimationFrame === "function"
@@ -567,17 +572,27 @@ export function start(program, container, { flags, effects = {}, ports = {} } = 
 
   function receive(message) {
     if (!running) return;
-    draw(jorn, message, () => into.send({ painted: true }));
+    draw(jorn, routes, message, () => into.send({ painted: true }));
     if (message.frame) nextFrame(() => running && into.send({ frame: true }));
     if (message.error) console.warn(`Jorn: ${message.error}`);
   }
   out.subscribe(receive);
+  // An app with URL routing starts once it knows where the page is.
+  if (view) into.send({ url: view.location.href });
 
   return {
-    /** Stop the program and empty the container. */
+    /**
+     * The program's other ports, by name: `send` into the ones it subscribes
+     * to, and `subscribe` to the ones it sends on. Elm leaves out ports the
+     * program never uses.
+     */
+    ports: otherPorts(app.ports, toJorn, fromJorn),
+
+    /** Stop the program and empty the container. Its ports go quiet. */
     shutdown() {
       if (!running) return;
       running = false;
+      routes.follow(false);
       out.unsubscribe(receive);
       into.send({ shutdown: true });
       jorn.unmount();
@@ -602,7 +617,8 @@ export function start(program, container, { flags, effects = {}, ports = {} } = 
  * `https` become `ws` and `wss`. `csrfToken` goes to the server with
  * `flags`, for its `authorize` check. `flags` can be a function, called each
  * time the page connects, so a fresh session after a reconnect starts from
- * what's current.
+ * what's current. The page's own address goes to the server too, for apps
+ * with URL routing.
  *
  * If the connection drops, the page reconnects, backing off up to five
  * seconds between tries, and picks up its session where it left off.
@@ -639,6 +655,7 @@ export function stream(container, url, { flags, csrfToken, effects = {}, heartbe
     if (running && socket?.readyState === socket?.OPEN) socket.send(JSON.stringify(message));
   };
   const jorn = connect(container, { send: (event) => post({ event }), effects });
+  const routes = router(container, post);
 
   // For CSS: connecting, open, reconnecting or closed.
   const status = (state) => container.setAttribute("data-jorn-connection", state);
@@ -647,7 +664,9 @@ export function stream(container, url, { flags, csrfToken, effects = {}, heartbe
     status(attempt ? "reconnecting" : "connecting");
     const current = (socket = new Socket(address.href));
     current.addEventListener("open", () => {
-      post({ join: { protocol: 0, flags: typeof flags === "function" ? flags() : flags, csrfToken, session: session ?? undefined, seen } });
+      post({
+        join: { protocol: 0, flags: typeof flags === "function" ? flags() : flags, csrfToken, session: session ?? undefined, seen, url: view?.location?.href },
+      });
       status("open");
       attempt = 0;
       heard = true;
@@ -704,7 +723,7 @@ export function stream(container, url, { flags, csrfToken, effects = {}, heartbe
     if (message.mount) lost = false;
     else if (lost) return;
     try {
-      draw(jorn, message, () => post({ painted: true }));
+      draw(jorn, routes, message, () => post({ painted: true }));
     } catch (error) {
       // The page and the server disagree about what's on screen.
       console.warn(`Jorn: ${error.message}. Asking the server for the whole view.`);
@@ -733,6 +752,7 @@ export function stream(container, url, { flags, csrfToken, effects = {}, heartbe
 
   function stop(state) {
     running = false;
+    routes.follow(false);
     clearInterval(pulse);
     clearTimeout(retry);
     status(state);
@@ -826,17 +846,104 @@ export function defineServerComponent({ effects = {}, window = globalThis } = {}
 }
 
 // What both modes do with a message from the program: mount it, or apply
-// its patches and then its instructions, and say so if it asked.
-function draw(jorn, message, painted) {
+// its patches and then its instructions, and say so if it asked. A program
+// with URL routing also sets the title and changes the address.
+function draw(jorn, routes, message, painted) {
   if (message.mount) {
     jorn.mount(message.mount);
-    if (message.painted) painted();
+    routes.follow(message.routing === true);
   }
   if (message.patches) {
     jorn.patch(message.patches);
     jorn.run(message.instructions ?? []);
-    if (message.painted) painted();
   }
+  if (typeof message.title === "string") routes.title(message.title);
+  if ((message.mount || message.patches) && message.painted) painted();
+  if (message.navigate) routes.navigate(message.navigate);
+}
+
+// The page's side of URL routing, for apps made with
+// Jorn.Navigation.application. Once the program says it routes, clicks on
+// links in the container and the browser's back and forward buttons become
+// messages, and the program's navigation changes the address. The page
+// reports every change of address, so the URL the program sees is always the
+// browser's.
+function router(container, send) {
+  const doc = container.ownerDocument;
+  const view = doc.defaultView;
+  let following = false;
+
+  const report = () => send({ url: view.location.href });
+
+  // The clicks a browser would follow in this tab, like elm/browser: not
+  // with a modifier key, not to another frame or a download, and not ones a
+  // handler already took care of.
+  function click(event) {
+    if (event.defaultPrevented || event.button !== 0) return;
+    if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    const link = event.target?.closest?.("a[href]");
+    if (!link || !container.contains(link)) return;
+    if (link.getAttribute("target") || link.hasAttribute("download")) return;
+    // A server component inside the app has links of its own.
+    for (let node = link.parentNode; node && node !== container; node = node.parentNode) {
+      if (node.localName === "jorn-server-component") return;
+    }
+    event.preventDefault();
+    const href = link.getAttribute("href");
+    let absolute = href;
+    try {
+      absolute = new URL(href, link.baseURI).href;
+    } catch {
+      // The program decides what to do with an address it can't read.
+    }
+    send({ link: absolute });
+  }
+
+  return {
+    /** Follow links and history for the program, or stop. */
+    follow(yes) {
+      if (yes === following || !view) return;
+      following = yes;
+      if (yes) {
+        container.addEventListener("click", click);
+        view.addEventListener("popstate", report);
+      } else {
+        container.removeEventListener("click", click);
+        view.removeEventListener("popstate", report);
+      }
+    },
+
+    title(text) {
+      doc.title = text;
+    },
+
+    navigate({ push, replace, go, load, reload }) {
+      try {
+        if (typeof push === "string") {
+          view.history.pushState(null, "", push);
+          report();
+        } else if (typeof replace === "string") {
+          view.history.replaceState(null, "", replace);
+          report();
+        } else if (Number.isInteger(go)) {
+          // popstate reports where it lands.
+          view.history.go(go);
+        } else if (typeof load === "string") {
+          view.location.assign(load);
+        } else if (typeof reload === "boolean") {
+          view.location.reload(reload);
+        }
+      } catch (error) {
+        // pushState refuses an address on another site.
+        console.warn(`Jorn: couldn't change the address: ${error.message}`);
+      }
+    },
+  };
+}
+
+// A program's ports apart from the two Jorn talks to it on.
+function otherPorts(ports, toJorn, fromJorn) {
+  return Object.fromEntries(Object.entries(ports).filter(([name]) => name !== toJorn && name !== fromJorn));
 }
 
 // Copy the requested dotted fields (like "target.value") off an event into

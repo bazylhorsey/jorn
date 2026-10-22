@@ -1,11 +1,11 @@
 // A small server for the examples. Serves the repository root, so a page can
 // load ../../client/jorn.js, and runs the todos app on the server for
-// examples/todos/server.html.
+// examples/todos/server.html, and the chat room for examples/chat/.
 //
 //   node examples/serve.mjs        then open http://localhost:8000/examples/todos/
 //
-// Server mode needs the todos example built and `npm install` run in server/.
-// Restart this after rebuilding, since the server loads the build once.
+// Server mode needs the examples built and `npm install` run in server/.
+// Restart this after rebuilding, since the server loads each build once.
 
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
@@ -35,10 +35,12 @@ const server = createServer(async (request, response) => {
   }
 });
 
+const require = createRequire(import.meta.url);
+
 let todosOnServer = false;
 try {
   const { attach } = await import("../server/jorn.js");
-  const { Elm } = createRequire(import.meta.url)("./todos/build/main.js");
+  const { Elm } = require("./todos/build/main.js");
   // The saved list comes from the page. That's fine here, since it's the
   // user's own list, but flags from a page are whatever the page says.
   attach(server, { path: "/examples/todos/socket", program: Elm.Main, flags: ({ page }) => page });
@@ -47,7 +49,18 @@ try {
   console.log(`The todos app won't run on the server: ${error.message}`);
 }
 
+let chat = false;
+try {
+  const { attachChat } = await import("./chat/chat.mjs");
+  const { Elm } = require("./chat/build/main.js");
+  attachChat(server, { path: "/examples/chat/socket", program: Elm.Main });
+  chat = true;
+} catch (error) {
+  console.log(`The chat won't run: ${error.message}`);
+}
+
 server.listen(port, () => {
   console.log(`Serving ${root} at http://localhost:${port}/examples/todos/`);
   if (todosOnServer) console.log(`The same app on the server: http://localhost:${port}/examples/todos/server.html`);
+  if (chat) console.log(`The chat room, in two tabs: http://localhost:${port}/examples/chat/`);
 });

@@ -19,6 +19,35 @@ app.shutdown(); // stop the program and empty the container
 
 The program has to declare two ports, `toJorn` and `fromJorn` (see the `Jorn` module). If yours have other names, pass `ports: { toJorn: "...", fromJorn: "..." }`.
 
+## Talking to a running app
+
+The page talks to a running app the way it would to any Elm program: through the program's own ports. Any port it declares besides `toJorn` and `fromJorn` is in `app.ports`, as it would be from `Elm.Main.init`:
+
+```elm
+port notify : (Value -> msg) -> Sub msg
+
+port saved : Value -> Cmd msg
+```
+
+```js
+const app = start(Elm.Main, document.getElementById("app"));
+
+app.ports.notify.send({ text: "New version available" }); // into the program
+app.ports.saved.subscribe((draft) => localStorage.setItem("draft", JSON.stringify(draft))); // out of it
+```
+
+Elm leaves out ports the program never uses. After `shutdown`, the program ignores its ports.
+
+When the program runs on a server, the page can't reach its ports. Server code can, with `attach`'s `onSession` (see [server/jorn.js](../server#talking-to-sessions)).
+
+## URL routing
+
+An app made with `Jorn.Navigation.application` owns the page's address. `start` and `stream` need nothing extra for it: the page tells the app where it is, and once the app says it routes, the page takes over clicks on links inside the container and the browser's back and forward buttons, and sets `document.title` from the view.
+
+A click is left to the browser when a handler already prevented its default, when a modifier key or a button other than the main one was used, when the link has a `target` or `download` attribute, or when the link is inside a `<jorn-server-component>` in the app. Links outside the container aren't touched.
+
+The app's address is always the browser's: `pushUrl` and the rest change the address, and the page reports where it landed. Routing needs an `http` or `https` address, so serve the page rather than opening it as a file.
+
 ## Showing an app that runs on a server
 
 When the same program runs on a server with [server/jorn.js](../server), `stream` connects the page to it:
@@ -85,8 +114,8 @@ jorn.patch(patches); // after every update, with the output of Jorn.Patch.encode
 
 | | |
 |---|---|
-| `start(program, container, { flags, effects, ports })` | Run a compiled Jorn program in `container`. Returns `{ shutdown() }`. |
-| `stream(container, url, { flags, csrfToken, effects, heartbeat })` | Show a program running on a server in `container`, over a websocket. Returns `{ close() }`. |
+| `start(program, container, { flags, effects, ports })` | Run a compiled Jorn program in `container`. Returns `{ ports, shutdown() }`, where `ports` are the program's own ports. |
+| `stream(container, url, { flags, csrfToken, effects, heartbeat })` | Show a program running on a server in `container`, over a websocket. Sends the page's address when it connects. Returns `{ close() }`. |
 | `defineServerComponent({ effects })` | Define `<jorn-server-component>`. Only the first call counts. |
 | `connect(container, { send, decide, raw, effects })` | Take over `container`. Its only child is the root of your view from here on. `effects` maps names to the functions `Effect.client` can call. `decide`, for a program in the same page, answers handlers made with `Event.advanced` with `{ preventDefault, stopPropagation }`, before it returns. |
 | `.mount(node)` | Render a whole tree, replacing whatever was there. |
@@ -106,4 +135,4 @@ jorn.patch(patches); // after every update, with the output of Jorn.Patch.encode
 
 ## Tests
 
-`test/run.mjs` runs in jsdom: unit tests for live form state and events, then thousands of random view sequences generated in Elm, checking the DOM after every patch and routing every event back through the event router. `test/runtime.mjs` runs a small app through `Jorn.application` and `start`. See [CONTRIBUTING.md](../CONTRIBUTING.md) for how to run them.
+`test/run.mjs` runs in jsdom: unit tests for live form state and events, then thousands of random view sequences generated in Elm, checking the DOM after every patch and routing every event back through the event router. `test/runtime.mjs` runs a small app through `Jorn.application` and `start`. `test/routing.mjs` clicks every kind of link in an app with URL routing and runs every navigation effect, in the page or, with `server`, on a server. See [CONTRIBUTING.md](../CONTRIBUTING.md) for how to run them.
